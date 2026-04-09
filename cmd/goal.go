@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/kashemere/kashemere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/spf13/cobra"
 )
 

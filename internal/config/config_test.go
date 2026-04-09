@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kashemere/kashemere-cli/internal/config"
+	"github.com/mdmclean/kashmere-cli/internal/config"
 )
 
 func TestSaveAndLoad(t *testing.T) {

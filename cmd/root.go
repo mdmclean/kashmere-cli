@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kashemere/kashemere-cli/internal/config"
-	"github.com/kashemere/kashemere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/config"
+	"github.com/mdmclean/kashmere-cli/internal/crypto"
 	"github.com/spf13/cobra"
 )
 

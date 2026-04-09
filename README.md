@@ -8,14 +8,14 @@ a financial planning app. Designed for humans and AI agents.
 ### Download
 
 Grab the latest binary for your platform from the
-[Releases page](https://github.com/kashemere/kashemere-cli/releases/latest).
+[Releases page](https://github.com/mdmclean/kashmere-cli/releases/latest).
 
 ### Build from source
 
 Requires Go 1.22+.
 
 ```bash
-git clone https://github.com/kashemere/kashemere-cli
+git clone https://github.com/mdmclean/kashmere-cli
 cd kashemere-cli
 go build -o kashemere .
 ```

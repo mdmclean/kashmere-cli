@@ -1,4 +1,4 @@
-module github.com/kashemere/kashemere-cli
+module github.com/mdmclean/kashmere-cli
 
 go 1.26.2
 

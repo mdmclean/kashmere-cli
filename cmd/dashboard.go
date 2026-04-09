@@ -4,7 +4,7 @@ package cmd
 import (
 	"math"
 
-	"github.com/kashemere/kashemere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/spf13/cobra"
 )
 

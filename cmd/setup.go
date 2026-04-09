@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kashemere/kashemere-cli/internal/api"
-	"github.com/kashemere/kashemere-cli/internal/auth"
-	"github.com/kashemere/kashemere-cli/internal/config"
-	"github.com/kashemere/kashemere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/auth"
+	"github.com/mdmclean/kashmere-cli/internal/config"
+	"github.com/mdmclean/kashmere-cli/internal/crypto"
 	"github.com/spf13/cobra"
 )
 

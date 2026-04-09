@@ -13,11 +13,11 @@ CLI to manage accounts, portfolios, goals, and more.
 ## Installation
 
 Download the binary for your platform from:
-https://github.com/kashemere/kashemere-cli/releases/latest
+https://github.com/mdmclean/kashmere-cli/releases/latest
 
 Or build from source (requires Go 1.22+):
 ```bash
-git clone https://github.com/kashemere/kashemere-cli
+git clone https://github.com/mdmclean/kashmere-cli
 cd kashemere-cli
 go build -o kashemere .
 ```

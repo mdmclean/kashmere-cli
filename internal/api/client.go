@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/kashemere/kashemere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/crypto"
 )
 
 // Client is an authenticated Kashemere API client with E2E encryption.

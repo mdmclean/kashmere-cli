@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kashemere/kashemere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/crypto"
 )
 
 func TestDeriveKeyLength(t *testing.T) {

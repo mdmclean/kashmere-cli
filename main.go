@@ -1,6 +1,6 @@
 package main
 
-import "github.com/kashemere/kashemere-cli/cmd"
+import "github.com/mdmclean/kashmere-cli/cmd"
 
 var version = "dev"
 
