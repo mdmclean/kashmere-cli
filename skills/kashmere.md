@@ -197,5 +197,3 @@ Errors are printed to stderr as JSON and exit with a non-zero status:
 - All financial data is end-to-end encrypted. The CLI handles this transparently.
 - For write operations, the CLI always fetches the full current object before updating
   (required by E2E encryption — the server cannot merge partial encrypted updates).
-- For MCP-native agents, the Kashmere MCP server is an alternative interface.
-  See the main repo for MCP configuration.
