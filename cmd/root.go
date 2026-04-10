@@ -15,8 +15,8 @@ var cfg *config.Config
 var encKey []byte
 
 var rootCmd = &cobra.Command{
-	Use:   "kashemere",
-	Short: "Kashemere CLI — manage your finances from the terminal or as an agent",
+	Use:   "kashmere",
+	Short: "Kashmere CLI — manage your finances from the terminal or as an agent",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip auth for setup command
 		if cmd.Name() == "setup" {
@@ -26,10 +26,10 @@ var rootCmd = &cobra.Command{
 		var err error
 		cfg, err = config.Load()
 		if err != nil {
-			return fmt.Errorf("run 'kashemere setup' first: %w", err)
+			return fmt.Errorf("run 'kashmere setup' first: %w", err)
 		}
 
-		passphrase := os.Getenv("KASHEMERE_PASSPHRASE")
+		passphrase := os.Getenv("KASHMERE_PASSPHRASE")
 		if passphrase == "" {
 			fmt.Fprint(os.Stderr, "Encryption passphrase: ")
 			pass, err := readPassword()

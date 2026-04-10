@@ -11,7 +11,7 @@ import (
 	"github.com/mdmclean/kashmere-cli/internal/crypto"
 )
 
-// Client is an authenticated Kashemere API client with E2E encryption.
+// Client is an authenticated Kashmere API client with E2E encryption.
 type Client struct {
 	baseURL      string
 	apiKey       string

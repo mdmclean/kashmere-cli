@@ -1,13 +1,13 @@
 ---
-name: kashemere
-description: Use when the user wants to manage their Kashemere finances — portfolios,
+name: kashmere
+description: Use when the user wants to manage their Kashmere finances — portfolios,
              goals, cash flows, mortgages, settings, prices, or history. Handles
-             installation, setup, and all financial operations via the kashemere CLI.
+             installation, setup, and all financial operations via the kashmere CLI.
 ---
 
-# Kashemere CLI
+# Kashmere CLI
 
-Kashemere is a financial planning app. This skill helps you use the `kashemere`
+Kashmere is a financial planning app. This skill helps you use the `kashmere`
 CLI to manage accounts, portfolios, goals, and more.
 
 ## Installation
@@ -18,51 +18,51 @@ https://github.com/mdmclean/kashmere-cli/releases/latest
 Or build from source (requires Go 1.22+):
 ```bash
 git clone https://github.com/mdmclean/kashmere-cli
-cd kashemere-cli
-go build -o kashemere .
+cd kashmere-cli
+go build -o kashmere .
 ```
 
 ## First-time Setup
 
 ```bash
 # Email/password users (no browser needed):
-kashemere setup --email your@email.com
+kashmere setup --email your@email.com
 
 # OAuth/browser users:
-kashemere setup
-# Opens https://kashemere.app in browser. Complete login, then return here.
+kashmere setup
+# Opens https://kashmere.app in browser. Complete login, then return here.
 ```
 
-Setup stores `~/.kashemere/config.json` with your API key and encryption salt.
+Setup stores `~/.kashmere/config.json` with your API key and encryption salt.
 Your passphrase is NEVER stored — provide it via env var for agent use:
 
 ```bash
-export KASHEMERE_PASSPHRASE="your-passphrase"
+export KASHMERE_PASSPHRASE="your-passphrase"
 ```
 
 ## Environment Variables
 
 | Variable | Purpose |
 |----------|---------|
-| `KASHEMERE_PASSPHRASE` | Encryption passphrase (skips interactive prompt) |
-| `KASHEMERE_CONFIG` | Override config file path |
-| `KASHEMERE_API_BASE_URL` | Override API base URL |
+| `KASHMERE_PASSPHRASE` | Encryption passphrase (skips interactive prompt) |
+| `KASHMERE_CONFIG` | Override config file path |
+| `KASHMERE_API_BASE_URL` | Override API base URL |
 
 ## Commands
 
 ### portfolio
 
 ```bash
-kashemere portfolio list
-kashemere portfolio get <id>
-kashemere portfolio create \
+kashmere portfolio list
+kashmere portfolio get <id>
+kashmere portfolio create \
   --name "TFSA" \
   --institution "Questrade" \
   --owner person1 \
   --goal-id <goal-id> \
   --total-value 50000 \
   --allocations '[{"category":"US Equity","percentage":60},{"category":"Canadian Equity","percentage":40}]'
-kashemere portfolio update <id> --total-value 55000
+kashmere portfolio update <id> --total-value 55000
 ```
 
 Flags for create/update:
@@ -81,10 +81,10 @@ Flags for create/update:
 ### goal
 
 ```bash
-kashemere goal list
-kashemere goal get <id>
-kashemere goal create --name "Retirement" --target-type fixed --target-value 1000000
-kashemere goal update <id> --target-value 1200000
+kashmere goal list
+kashmere goal get <id>
+kashmere goal create --name "Retirement" --target-type fixed --target-value 1000000
+kashmere goal update <id> --target-value 1200000
 ```
 
 Flags for create/update:
@@ -97,14 +97,14 @@ Flags for create/update:
 ### cashflow
 
 ```bash
-kashemere cashflow list [--portfolio-id <id>]
-kashemere cashflow get <id>
-kashemere cashflow create \
+kashmere cashflow list [--portfolio-id <id>]
+kashmere cashflow get <id>
+kashmere cashflow create \
   --portfolio-id <id> \
   --type deposit \
   --amount 5000 \
   --date 2026-04-09
-kashemere cashflow update <id> --amount 6000
+kashmere cashflow update <id> --amount 6000
 ```
 
 Flags for create/update:
@@ -118,9 +118,9 @@ Flags for create/update:
 ### mortgage
 
 ```bash
-kashemere mortgage list
-kashemere mortgage get <id>
-kashemere mortgage create \
+kashmere mortgage list
+kashmere mortgage get <id>
+kashmere mortgage create \
   --name "Main Home" \
   --owner joint \
   --institution "TD Bank" \
@@ -132,7 +132,7 @@ kashemere mortgage create \
   --start-date 2022-01-01 \
   --term-end-date 2027-01-01 \
   --amortization-years 25
-kashemere mortgage update <id> --current-balance 510000
+kashmere mortgage update <id> --current-balance 510000
 ```
 
 Flags for create/update:
@@ -145,7 +145,7 @@ Flags for create/update:
 ### dashboard
 
 ```bash
-kashemere dashboard
+kashmere dashboard
 ```
 
 Returns total portfolio value, weighted allocations, goal summaries, and net worth.
@@ -153,23 +153,23 @@ Returns total portfolio value, weighted allocations, goal summaries, and net wor
 ### history
 
 ```bash
-kashemere history
-kashemere history --from 2025-01-01 --to 2026-01-01
-kashemere history --portfolio-id <id>
+kashmere history
+kashmere history --from 2025-01-01 --to 2026-01-01
+kashmere history --portfolio-id <id>
 ```
 
 ### price
 
 ```bash
-kashemere price list
-kashemere price list --symbols VCN,VFV,XEQT
+kashmere price list
+kashmere price list --symbols VCN,VFV,XEQT
 ```
 
 ### settings
 
 ```bash
-kashemere settings get
-kashemere settings update --person1-name "Alice" --display-currency CAD
+kashmere settings get
+kashmere settings update --person1-name "Alice" --display-currency CAD
 ```
 
 Flags for update:
@@ -183,7 +183,7 @@ Flags for update:
 All commands output JSON to stdout. Use `--pretty` for readable output:
 
 ```bash
-kashemere portfolio list --pretty
+kashmere portfolio list --pretty
 ```
 
 Errors are printed to stderr as JSON and exit with a non-zero status:
@@ -197,5 +197,5 @@ Errors are printed to stderr as JSON and exit with a non-zero status:
 - All financial data is end-to-end encrypted. The CLI handles this transparently.
 - For write operations, the CLI always fetches the full current object before updating
   (required by E2E encryption — the server cannot merge partial encrypted updates).
-- For MCP-native agents, the Kashemere MCP server is an alternative interface.
+- For MCP-native agents, the Kashmere MCP server is an alternative interface.
   See the main repo for MCP configuration.

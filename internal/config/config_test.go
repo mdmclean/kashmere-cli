@@ -16,7 +16,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg := &config.Config{
 		APIKey:     "fp_abc123",
 		Salt:       "dGVzdHNhbHQ=",
-		APIBaseURL: "https://api.kashemere.app",
+		APIBaseURL: "https://api.kashmere.app",
 	}
 
 	if err := config.SaveTo(cfg, path); err != nil {
@@ -41,7 +41,7 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestDefaultConfigPath(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	want := filepath.Join(home, ".kashemere", "config.json")
+	want := filepath.Join(home, ".kashmere", "config.json")
 	if got := config.DefaultPath(); got != want {
 		t.Errorf("DefaultPath: got %q, want %q", got, want)
 	}

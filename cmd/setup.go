@@ -25,13 +25,13 @@ var (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Authenticate and store credentials in ~/.kashemere/config.json",
+	Short: "Authenticate and store credentials in ~/.kashmere/config.json",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if setupAPIBase == "" {
-			setupAPIBase = os.Getenv("KASHEMERE_API_BASE_URL")
+			setupAPIBase = os.Getenv("KASHMERE_API_BASE_URL")
 		}
 		if setupAPIBase == "" {
-			setupAPIBase = "https://api.kashemere.app/api/v1"
+			setupAPIBase = "https://api.kashmere.app/api/v1"
 		}
 
 		// Check for existing config
@@ -86,7 +86,7 @@ var setupCmd = &cobra.Command{
 		}
 
 		// Verify passphrase
-		passphrase := os.Getenv("KASHEMERE_PASSPHRASE")
+		passphrase := os.Getenv("KASHMERE_PASSPHRASE")
 		if passphrase == "" {
 			fmt.Fprint(os.Stderr, "Encryption passphrase (same as web app): ")
 			p, err := readPassword()
@@ -129,7 +129,7 @@ var setupCmd = &cobra.Command{
 func init() {
 	setupCmd.Flags().StringVar(&setupEmail, "email", "", "Email address for email/password login (skips browser)")
 	setupCmd.Flags().BoolVar(&setupForce, "force", false, "Overwrite existing config without prompting")
-	setupCmd.Flags().StringVar(&setupAPIBase, "api-base", "", "API base URL (default: https://api.kashemere.app/api/v1)")
+	setupCmd.Flags().StringVar(&setupAPIBase, "api-base", "", "API base URL (default: https://api.kashmere.app/api/v1)")
 	rootCmd.AddCommand(setupCmd)
 }
 

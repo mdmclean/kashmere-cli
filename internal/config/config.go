@@ -16,11 +16,11 @@ type Config struct {
 
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".kashemere", "config.json")
+	return filepath.Join(home, ".kashmere", "config.json")
 }
 
 func Load() (*Config, error) {
-	path := os.Getenv("KASHEMERE_CONFIG")
+	path := os.Getenv("KASHMERE_CONFIG")
 	if path == "" {
 		path = DefaultPath()
 	}
@@ -31,7 +31,7 @@ func LoadFrom(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, errors.New("config not found — run 'kashemere setup' first")
+			return nil, errors.New("config not found — run 'kashmere setup' first")
 		}
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func LoadFrom(path string) (*Config, error) {
 }
 
 func Save(cfg *Config) error {
-	path := os.Getenv("KASHEMERE_CONFIG")
+	path := os.Getenv("KASHMERE_CONFIG")
 	if path == "" {
 		path = DefaultPath()
 	}

@@ -41,7 +41,7 @@ jobs:
         run: |
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
-          output="kashemere-${{ matrix.goos }}-${{ matrix.goarch }}${ext}"
+          output="kashmere-${{ matrix.goos }}-${{ matrix.goarch }}${ext}"
           go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
             -o "$output" .
           echo "OUTPUT=$output" >> $GITHUB_ENV
@@ -49,7 +49,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kashemere-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: kashmere-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.OUTPUT }}
 
   release:
