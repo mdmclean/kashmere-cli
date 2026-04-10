@@ -40,7 +40,7 @@ kashmere portfolio list
 ```
 
 For Claude Code agents, load the skill from this repo:
-`skills/kashmere.md`
+`skills/kashmere.md` — or `/kashmere` if you have the skill installed
 
 ## Commands
 
