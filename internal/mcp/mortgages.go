@@ -22,7 +22,7 @@ func registerMortgageTools(server *sdkmcp.Server, c *api.Client) {
 			return ErrResult(err), nil, nil
 		}
 		if in.Owner != nil {
-			filtered := mortgages[:0]
+			filtered := make([]api.Mortgage, 0, len(mortgages))
 			for _, m := range mortgages {
 				if m.Owner == *in.Owner {
 					filtered = append(filtered, m)
@@ -129,6 +129,9 @@ func registerMortgageTools(server *sdkmcp.Server, c *api.Client) {
 		if in.TermEndDate != nil { updates["termEndDate"] = *in.TermEndDate }
 		if in.AmortizationYears != nil { updates["amortizationYears"] = *in.AmortizationYears }
 		if in.ExtraPayment != nil { updates["extraPayment"] = *in.ExtraPayment }
+		if len(updates) == 0 {
+			return TextResult("no fields to update"), nil, nil
+		}
 		var mortgage api.Mortgage
 		if err := c.MergeAndUpdate("/mortgages/"+in.ID, updates, &mortgage); err != nil {
 			return ErrResult(err), nil, nil

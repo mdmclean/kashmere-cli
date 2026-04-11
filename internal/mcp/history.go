@@ -36,7 +36,7 @@ func registerHistoryTools(server *sdkmcp.Server, c *api.Client) {
 			return ErrResult(err), nil, nil
 		}
 		if in.PortfolioID != nil {
-			filtered := snapshots[:0]
+			filtered := make([]api.PortfolioSnapshot, 0, len(snapshots))
 			for _, s := range snapshots {
 				if s.PortfolioID == *in.PortfolioID {
 					filtered = append(filtered, s)

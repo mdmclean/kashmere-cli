@@ -43,6 +43,9 @@ func registerSettingsTools(server *sdkmcp.Server, c *api.Client) {
 		if in.DisplayCurrency != nil {
 			updates["displayCurrency"] = *in.DisplayCurrency
 		}
+		if len(updates) == 0 {
+			return TextResult("no fields to update"), nil, nil
+		}
 		var settings api.Settings
 		if err := c.MergeAndUpdate("/settings", updates, &settings); err != nil {
 			return ErrResult(err), nil, nil

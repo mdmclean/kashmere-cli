@@ -22,7 +22,7 @@ func registerCashFlowTools(server *sdkmcp.Server, c *api.Client) {
 			return ErrResult(err), nil, nil
 		}
 		if in.PortfolioID != nil {
-			filtered := cashflows[:0]
+			filtered := make([]api.CashFlow, 0, len(cashflows))
 			for _, cf := range cashflows {
 				if cf.PortfolioID == *in.PortfolioID {
 					filtered = append(filtered, cf)
@@ -99,6 +99,9 @@ func registerCashFlowTools(server *sdkmcp.Server, c *api.Client) {
 		if in.Date != nil { updates["date"] = *in.Date }
 		if in.Description != nil { updates["description"] = *in.Description }
 		if in.PortfolioID != nil { updates["portfolioId"] = *in.PortfolioID }
+		if len(updates) == 0 {
+			return TextResult("no fields to update"), nil, nil
+		}
 		var cf api.CashFlow
 		if err := c.MergeAndUpdate("/cashflows/"+in.ID, updates, &cf); err != nil {
 			return ErrResult(err), nil, nil
