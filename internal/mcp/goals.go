@@ -3,7 +3,6 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -98,12 +97,6 @@ func registerGoalTools(server *sdkmcp.Server, c *api.Client) {
 			updates["target"] = nil
 		} else if in.TargetType != nil && in.TargetValue != nil {
 			updates["target"] = map[string]any{"type": *in.TargetType, "value": *in.TargetValue}
-		} else if in.TargetType != nil || in.TargetValue != nil {
-			missing := "targetValue"
-			if in.TargetValue != nil {
-				missing = "targetType"
-			}
-			return ErrResult(fmt.Errorf("targetType and targetValue must be provided together; missing: %s", missing)), nil, nil
 		}
 		if in.ClearAllocations != nil && *in.ClearAllocations {
 			updates["allocations"] = nil

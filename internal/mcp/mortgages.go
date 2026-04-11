@@ -149,19 +149,4 @@ func registerMortgageTools(server *sdkmcp.Server, c *api.Client) {
 		}
 		return TextResult("Mortgage deleted successfully."), nil, nil
 	})
-
-	// get_mortgage_projection
-	type getMortgageProjectionInput struct {
-		ID string `json:"id" jsonschema:"The mortgage ID"`
-	}
-	sdkmcp.AddTool(server, &sdkmcp.Tool{
-		Name:        "get_mortgage_projection",
-		Description: "Get amortization schedule and payoff projection for a mortgage",
-	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getMortgageProjectionInput) (*sdkmcp.CallToolResult, any, error) {
-		var projection any
-		if err := c.Get("/mortgages/"+in.ID+"/projection", &projection); err != nil {
-			return ErrResult(err), nil, nil
-		}
-		return JSONResult(projection), nil, nil
-	})
 }
