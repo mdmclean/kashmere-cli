@@ -16,7 +16,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg := &config.Config{
 		APIKey:     "fp_abc123",
 		Salt:       "dGVzdHNhbHQ=",
-		APIBaseURL: "https://api.kashmere.app",
+		APIBaseURL: "https://kashmere.app/api/v1",
 	}
 
 	if err := config.SaveTo(cfg, path); err != nil {

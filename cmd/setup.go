@@ -32,7 +32,7 @@ var setupCmd = &cobra.Command{
 			setupAPIBase = os.Getenv("KASHMERE_API_BASE_URL")
 		}
 		if setupAPIBase == "" {
-			setupAPIBase = "https://api.kashmere.app/api/v1"
+			setupAPIBase = "https://kashmere.app/api/v1"
 		}
 
 		// Check for existing config
@@ -130,7 +130,7 @@ var setupCmd = &cobra.Command{
 func init() {
 	setupCmd.Flags().StringVar(&setupEmail, "email", "", "Email address for email/password login (skips browser)")
 	setupCmd.Flags().BoolVar(&setupForce, "force", false, "Overwrite existing config without prompting")
-	setupCmd.Flags().StringVar(&setupAPIBase, "api-base", "", "API base URL (default: https://api.kashmere.app/api/v1)")
+	setupCmd.Flags().StringVar(&setupAPIBase, "api-base", "", "API base URL (default: https://kashmere.app/api/v1)")
 	setupCmd.Flags().StringVar(&setupAppURL, "app-url", "", "App URL for browser OAuth (default: derived from api-base)")
 	rootCmd.AddCommand(setupCmd)
 }
@@ -164,7 +164,7 @@ func loginWithBrowser(apiBase string) (string, error) {
 	callbackURL := fmt.Sprintf("http://localhost:%d/callback", port)
 	appURL := setupAppURL
 	if appURL == "" {
-		appURL = strings.NewReplacer("https://api.", "https://", "/api/v1", "").Replace(apiBase)
+		appURL = strings.Replace(apiBase, "/api/v1", "", 1)
 	}
 	loginURL := fmt.Sprintf("%s/cli-auth?callback=%s", appURL, callbackURL)
 
