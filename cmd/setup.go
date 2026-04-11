@@ -97,10 +97,6 @@ var setupCmd = &cobra.Command{
 			passphrase = p
 		}
 
-		// Verify the passphrase works by attempting key derivation (length check)
-		if len(passphrase) < 12 {
-			return fmt.Errorf("passphrase must be at least 12 characters")
-		}
 		salt, err := crypto.SaltFromBase64(saltResp.Salt)
 		if err != nil {
 			return fmt.Errorf("invalid salt from server: %w", err)
