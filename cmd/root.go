@@ -7,6 +7,7 @@ import (
 
 	"github.com/mdmclean/kashmere-cli/internal/config"
 	"github.com/mdmclean/kashmere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/keychain"
 	"github.com/spf13/cobra"
 )
 
@@ -31,12 +32,23 @@ var rootCmd = &cobra.Command{
 
 		passphrase := os.Getenv("KASHMERE_PASSPHRASE")
 		if passphrase == "" {
+			stored, err := keychain.Get()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not read keychain: %v\n", err)
+			}
+			passphrase = stored
+		}
+		if passphrase == "" {
 			fmt.Fprint(os.Stderr, "Encryption passphrase: ")
 			pass, err := readPassword()
 			if err != nil {
 				return fmt.Errorf("reading passphrase: %w", err)
 			}
 			passphrase = pass
+			// Save to keychain for future runs
+			if err := keychain.Set(passphrase); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not save passphrase to keychain: %v\n", err)
+			}
 		}
 
 		salt, err := crypto.SaltFromBase64(cfg.Salt)

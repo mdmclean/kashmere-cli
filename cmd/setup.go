@@ -14,6 +14,7 @@ import (
 	"github.com/mdmclean/kashmere-cli/internal/auth"
 	"github.com/mdmclean/kashmere-cli/internal/config"
 	"github.com/mdmclean/kashmere-cli/internal/crypto"
+	"github.com/mdmclean/kashmere-cli/internal/keychain"
 	"github.com/spf13/cobra"
 )
 
@@ -112,6 +113,9 @@ var setupCmd = &cobra.Command{
 		}
 		if err := config.Save(cfg); err != nil {
 			return fmt.Errorf("saving config: %w", err)
+		}
+		if err := keychain.Set(passphrase); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not save passphrase to keychain: %v\n", err)
 		}
 
 		outputJSON(map[string]string{
