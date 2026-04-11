@@ -166,7 +166,7 @@ func loginWithBrowser(apiBase string) (string, error) {
 	if appURL == "" {
 		appURL = strings.NewReplacer("https://api.", "https://", "/api/v1", "").Replace(apiBase)
 	}
-	loginURL := fmt.Sprintf("%s/auth/cli?callback=%s", appURL, callbackURL)
+	loginURL := fmt.Sprintf("%s/cli-auth?callback=%s", appURL, callbackURL)
 
 	fmt.Fprintf(os.Stderr, "\nOpening browser to: %s\n", loginURL)
 	fmt.Fprintln(os.Stderr, "If the browser does not open, visit the URL above manually.")
