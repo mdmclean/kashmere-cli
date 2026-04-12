@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,11 @@ var portfolioListCmd = &cobra.Command{
 		if err := client.Get("/portfolios", &portfolios); err != nil {
 			outputError(err, 0)
 		}
-		outputJSON(portfolios)
+		enriched, err := portfolio.Enrich(portfolios, client)
+		if err != nil {
+			outputError(err, 0)
+		}
+		outputJSON(enriched)
 		return nil
 	},
 }
@@ -35,11 +40,15 @@ var portfolioGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := api.New(cfg.APIBaseURL, cfg.APIKey, encKey)
-		var portfolio api.Portfolio
-		if err := client.Get("/portfolios/"+args[0], &portfolio); err != nil {
+		var p api.Portfolio
+		if err := client.Get("/portfolios/"+args[0], &p); err != nil {
 			outputError(err, 0)
 		}
-		outputJSON(portfolio)
+		enriched, err := portfolio.Enrich([]api.Portfolio{p}, client)
+		if err != nil {
+			outputError(err, 0)
+		}
+		outputJSON(enriched[0])
 		return nil
 	},
 }
@@ -64,9 +73,13 @@ var portfolioCreateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := api.New(cfg.APIBaseURL, cfg.APIKey, encKey)
 
-		totalValue, err := strconv.ParseFloat(pfTotalValue, 64)
-		if err != nil {
-			return fmt.Errorf("--total-value must be a number: %w", err)
+		totalValue := 0.0
+		if pfTotalValue != "" {
+			v, err := strconv.ParseFloat(pfTotalValue, 64)
+			if err != nil {
+				return fmt.Errorf("--total-value must be a number: %w", err)
+			}
+			totalValue = v
 		}
 
 		var allocations []api.Allocation
@@ -196,7 +209,7 @@ func init() {
 	portfolioCreateCmd.Flags().StringVar(&pfOwner, "owner", "", "Owner: person1|person2|joint (required)")
 	portfolioCreateCmd.Flags().StringVar(&pfManagementType, "management-type", "self", "Management type: self|auto")
 	portfolioCreateCmd.Flags().StringVar(&pfGoalID, "goal-id", "", "Goal ID to assign this portfolio to (required)")
-	portfolioCreateCmd.Flags().StringVar(&pfTotalValue, "total-value", "", "Total portfolio value in display currency (required)")
+	portfolioCreateCmd.Flags().StringVar(&pfTotalValue, "total-value", "", "Total portfolio value (optional — computed from assets when present)")
 	portfolioCreateCmd.Flags().StringVar(&pfMinTransactionAmount, "min-transaction-amount", "", "Minimum transaction amount")
 	portfolioCreateCmd.Flags().StringVar(&pfMinTransactionCurrency, "min-transaction-currency", "", "Min transaction currency: CAD|USD")
 	portfolioCreateCmd.Flags().StringVar(&pfAllocationsJSON, "allocations", "[]", `Allocations JSON: '[{"category":"US Equity","percentage":100}]'`)
@@ -205,7 +218,6 @@ func init() {
 	portfolioCreateCmd.MarkFlagRequired("institution")
 	portfolioCreateCmd.MarkFlagRequired("owner")
 	portfolioCreateCmd.MarkFlagRequired("goal-id")
-	portfolioCreateCmd.MarkFlagRequired("total-value")
 
 	// update flags (same names, none required)
 	portfolioUpdateCmd.Flags().StringVar(&pfName, "name", "", "New name")
