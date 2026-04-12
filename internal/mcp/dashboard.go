@@ -6,6 +6,7 @@ import (
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/mdmclean/kashmere-cli/internal/dashboard"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -20,6 +21,10 @@ func registerDashboardTools(server *sdkmcp.Server, c *api.Client) {
 		if err := c.Get("/portfolios", &portfolios); err != nil {
 			return ErrResult(err), nil, nil
 		}
+		enriched, err := portfolio.Enrich(portfolios, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
 		var goals []api.Goal
 		if err := c.Get("/goals", &goals); err != nil {
 			return ErrResult(err), nil, nil
@@ -27,6 +32,6 @@ func registerDashboardTools(server *sdkmcp.Server, c *api.Client) {
 		var mortgages []api.Mortgage
 		c.Get("/mortgages", &mortgages) // optional — ignore error
 
-		return JSONResult(dashboard.Compute(portfolios, goals, mortgages)), nil, nil
+		return JSONResult(dashboard.Compute(enriched, goals, mortgages)), nil, nil
 	})
 }
