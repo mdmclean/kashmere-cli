@@ -4,6 +4,7 @@ package cmd
 import (
 	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/mdmclean/kashmere-cli/internal/dashboard"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,12 @@ var dashboardCmd = &cobra.Command{
 		var mortgages []api.Mortgage
 		client.Get("/mortgages", &mortgages) // optional, ignore error
 
-		outputJSON(dashboard.Compute(portfolios, goals, mortgages))
+		enriched, err := portfolio.Enrich(portfolios, client)
+		if err != nil {
+			outputError(err, 0)
+		}
+
+		outputJSON(dashboard.Compute(enriched, goals, mortgages))
 		return nil
 	},
 }
