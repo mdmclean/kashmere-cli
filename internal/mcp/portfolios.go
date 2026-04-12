@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,7 +22,11 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		if err := c.Get("/portfolios", &portfolios); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(portfolios), nil, nil
+		enriched, err := portfolio.Enrich(portfolios, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(enriched), nil, nil
 	})
 
 	// get_portfolio
@@ -32,11 +37,15 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		Name:        "get_portfolio",
 		Description: "Get a specific investment portfolio by ID",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getPortfolioInput) (*sdkmcp.CallToolResult, any, error) {
-		var portfolio api.Portfolio
-		if err := c.Get("/portfolios/"+in.ID, &portfolio); err != nil {
+		var p api.Portfolio
+		if err := c.Get("/portfolios/"+in.ID, &p); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(portfolio), nil, nil
+		enriched, err := portfolio.Enrich([]api.Portfolio{p}, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(enriched[0]), nil, nil
 	})
 
 	// list_institutions
@@ -57,7 +66,7 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		Institution            string           `json:"institution" jsonschema:"Financial institution name (e.g. Wealthsimple, Questrade)"`
 		Owner                  string           `json:"owner" jsonschema:"Account owner: person1, person2, or joint"`
 		GoalID                 string           `json:"goalId" jsonschema:"ID of the goal this portfolio is assigned to"`
-		TotalValue             float64          `json:"totalValue" jsonschema:"Total portfolio value in dollars"`
+		TotalValue             *float64         `json:"totalValue,omitempty" jsonschema:"Total portfolio value in dollars (optional — computed from assets when present)"`
 		Allocations            []api.Allocation `json:"allocations" jsonschema:"Target asset allocations, must sum to 100"`
 		Description            *string          `json:"description,omitempty" jsonschema:"Optional portfolio description"`
 		ManagementType         *string          `json:"managementType,omitempty" jsonschema:"Portfolio management type: self (default) or auto"`
@@ -69,12 +78,16 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		Name:        "create_portfolio",
 		Description: "Create a new investment portfolio",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in createPortfolioInput) (*sdkmcp.CallToolResult, any, error) {
+		totalValue := 0.0
+		if in.TotalValue != nil {
+			totalValue = *in.TotalValue
+		}
 		body := map[string]any{
 			"name":        in.Name,
 			"institution": in.Institution,
 			"owner":       in.Owner,
 			"goalId":      in.GoalID,
-			"totalValue":  in.TotalValue,
+			"totalValue":  totalValue,
 			"allocations": in.Allocations,
 		}
 		if in.Description != nil {
@@ -92,11 +105,15 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		if in.MinTransactionCurrency != nil {
 			body["minTransactionCurrency"] = *in.MinTransactionCurrency
 		}
-		var portfolio api.Portfolio
-		if err := c.Post("/portfolios", body, &portfolio); err != nil {
+		var created api.Portfolio
+		if err := c.Post("/portfolios", body, &created); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(portfolio), nil, nil
+		enriched, err := portfolio.Enrich([]api.Portfolio{created}, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(enriched[0]), nil, nil
 	})
 
 	// update_portfolio
@@ -133,11 +150,15 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		if len(updates) == 0 {
 			return ErrResult(fmt.Errorf("no fields provided to update")), nil, nil
 		}
-		var portfolio api.Portfolio
-		if err := c.MergeAndUpdate("/portfolios/"+in.ID, updates, &portfolio); err != nil {
+		var updated api.Portfolio
+		if err := c.MergeAndUpdate("/portfolios/"+in.ID, updates, &updated); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(portfolio), nil, nil
+		enriched, err := portfolio.Enrich([]api.Portfolio{updated}, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(enriched[0]), nil, nil
 	})
 
 	// delete_portfolio
