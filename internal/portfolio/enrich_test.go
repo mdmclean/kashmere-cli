@@ -1,0 +1,261 @@
+package portfolio_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
+)
+
+func ptr[T any](v T) *T { return &v }
+
+// newTestServer starts a fake API that handles /prices and /settings.
+func newTestServer(t *testing.T, pricesResp []api.TickerPrice, displayCurrency string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/prices":
+			json.NewEncoder(w).Encode(pricesResp)
+		case r.URL.Path == "/settings":
+			json.NewEncoder(w).Encode(api.Settings{DisplayCurrency: displayCurrency})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+func TestEnrich_StaticCashAsset(t *testing.T) {
+	srv := newTestServer(t, nil, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "CASH", Quantity: 50000},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	if got[0].TotalValue != 50000 {
+		t.Errorf("TotalValue = %.2f, want 50000", got[0].TotalValue)
+	}
+}
+
+func TestEnrich_StaticCashAssetUSD(t *testing.T) {
+	usdcadRate := 1.38
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: ptr(usdcadRate)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "CASH", Quantity: 10000, Currency: "USD"},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	want := 10000 * usdcadRate
+	if got[0].TotalValue != want {
+		t.Errorf("TotalValue = %.2f, want %.2f", got[0].TotalValue, want)
+	}
+}
+
+func TestEnrich_TradedAsset(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(45.50), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "VCN", Exchange: "TSX", Quantity: 100, Currency: "CAD"},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	want := 100.0 * 45.50
+	if got[0].TotalValue != want {
+		t.Errorf("TotalValue = %.2f, want %.2f", got[0].TotalValue, want)
+	}
+}
+
+func TestEnrich_TradedAssetUSDToCad(t *testing.T) {
+	usdcadRate := 1.38
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VFV", Exchange: "TSX", LatestPrice: ptr(150.0), Currency: "USD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(usdcadRate)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "VFV", Exchange: "TSX", Quantity: 10, Currency: "USD"},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	want := 10 * 150.0 * usdcadRate
+	if got[0].TotalValue != want {
+		t.Errorf("TotalValue = %.2f, want %.2f", got[0].TotalValue, want)
+	}
+}
+
+func TestEnrich_MissingPrice_SkipsAsset(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "VCN", Exchange: "TSX", Quantity: 100},
+			},
+			TotalValue: 999,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	if got[0].TotalValue != 999 {
+		t.Errorf("TotalValue = %.2f, want 999 (stored fallback)", got[0].TotalValue)
+	}
+}
+
+func TestEnrich_NoAssets_Unchanged(t *testing.T) {
+	srv := newTestServer(t, nil, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{ID: "p1", Assets: []api.Asset{}, TotalValue: 75000},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	if got[0].TotalValue != 75000 {
+		t.Errorf("TotalValue = %.2f, want 75000", got[0].TotalValue)
+	}
+}
+
+func TestEnrich_MixedStaticAndTraded(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(45.0), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "CASH", Quantity: 10000},
+				{ID: "a2", Ticker: "VCN", Exchange: "TSX", Quantity: 200, Currency: "CAD"},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	want := 10000.0 + 200*45.0
+	if got[0].TotalValue != want {
+		t.Errorf("TotalValue = %.2f, want %.2f", got[0].TotalValue, want)
+	}
+}
+
+func TestEnrich_MissingFXRate_NoConversion(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: nil},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{
+			ID: "p1",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "CASH", Quantity: 5000, Currency: "USD"},
+			},
+			TotalValue: 0,
+		},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	if got[0].TotalValue != 5000 {
+		t.Errorf("TotalValue = %.2f, want 5000", got[0].TotalValue)
+	}
+}
+
+func TestEnrich_MultiplePortfolios(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{
+		{ID: "p1", Assets: []api.Asset{{ID: "a1", Ticker: "CASH", Quantity: 1000}}, TotalValue: 0},
+		{ID: "p2", Assets: []api.Asset{{ID: "a2", Ticker: "GIC", Quantity: 25000}}, TotalValue: 0},
+	}
+
+	got, err := portfolio.Enrich(portfolios, c)
+	if err != nil {
+		t.Fatalf("Enrich: %v", err)
+	}
+	if got[0].TotalValue != 1000 {
+		t.Errorf("p1 TotalValue = %.2f, want 1000", got[0].TotalValue)
+	}
+	if got[1].TotalValue != 25000 {
+		t.Errorf("p2 TotalValue = %.2f, want 25000", got[1].TotalValue)
+	}
+}
