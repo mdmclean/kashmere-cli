@@ -202,6 +202,7 @@ var portfolioUpdateCmd = &cobra.Command{
 			var current api.Portfolio
 			if err := client.Get(path, &current); err != nil {
 				outputError(err, 0)
+				return nil
 			}
 			if v, ok := updates["allocations"]; ok {
 				current.Allocations = v.([]api.Allocation)
