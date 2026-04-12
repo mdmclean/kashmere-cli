@@ -96,6 +96,10 @@ var portfolioCreateCmd = &cobra.Command{
 			}
 		}
 
+		if err := portfolio.Validate(api.Portfolio{Allocations: allocations, Assets: assets}); err != nil {
+			return err
+		}
+
 		body := map[string]any{
 			"name":           pfName,
 			"institution":    pfInstitution,
@@ -191,8 +195,26 @@ var portfolioUpdateCmd = &cobra.Command{
 			return fmt.Errorf("no flags provided — nothing to update")
 		}
 
-		var result api.Portfolio
 		path := "/portfolios/" + args[0]
+
+		// Validate merged state if allocation-sensitive fields are changing.
+		if updates["allocations"] != nil || updates["assets"] != nil {
+			var current api.Portfolio
+			if err := client.Get(path, &current); err != nil {
+				outputError(err, 0)
+			}
+			if v, ok := updates["allocations"]; ok {
+				current.Allocations = v.([]api.Allocation)
+			}
+			if v, ok := updates["assets"]; ok {
+				current.Assets = v.([]api.Asset)
+			}
+			if err := portfolio.Validate(current); err != nil {
+				return err
+			}
+		}
+
+		var result api.Portfolio
 		if err := client.MergeAndUpdate(path, updates, &result); err != nil {
 			outputError(err, 0)
 		}
