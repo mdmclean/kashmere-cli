@@ -78,6 +78,36 @@ Flags for create/update:
 - `--min-transaction-amount` — minimum trade size
 - `--min-transaction-currency` — `CAD` | `USD`
 
+#### Asset targets (`targetPercentage`)
+
+Assets have an optional `targetPercentage` field. This is the asset's **share within its asset class**, not its share of the total portfolio.
+
+Example — a portfolio with two allocation classes:
+
+```json
+"allocations": [
+  { "category": "US Equity",       "percentage": 50 },
+  { "category": "Canadian Equity", "percentage": 50 }
+]
+```
+
+With assets:
+
+```json
+"assets": [
+  { "ticker": "VTI", "category": "US Equity",       "targetPercentage": 60 },
+  { "ticker": "VGK", "category": "US Equity",       "targetPercentage": 40 },
+  { "ticker": "VCN", "category": "Canadian Equity", "targetPercentage": 100 }
+]
+```
+
+VTI is 60% of the US Equity class, which is 50% of the portfolio → VTI = **30% of total portfolio**.
+
+**Rules enforced by the CLI/MCP (hard errors):**
+
+- `allocations[].percentage` must sum to 100%.
+- `asset.targetPercentage` values must sum to 100% within each class — but only for classes where **all** assets have a target set. Partially-set targets are skipped.
+
 ### goal
 
 ```bash
