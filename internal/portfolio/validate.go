@@ -8,6 +8,9 @@ import (
 	"github.com/mdmclean/kashmere-cli/internal/api"
 )
 
+// percentageTolerance is the maximum allowed deviation from 100%
+// when summing allocation or asset-target percentages.
+// 0.01 permits rounding errors up to ±0.01 percentage points.
 const percentageTolerance = 0.01
 
 // Validate checks that a portfolio's allocations and asset targets are internally
@@ -60,9 +63,6 @@ func validateAssetTargetSums(assets []api.Asset) error {
 
 	for category, info := range classes {
 		if info.hasNil {
-			continue
-		}
-		if info.count == 0 {
 			continue
 		}
 		if math.Abs(info.sum-100) > percentageTolerance {
