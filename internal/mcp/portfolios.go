@@ -105,6 +105,14 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		if in.MinTransactionCurrency != nil {
 			body["minTransactionCurrency"] = *in.MinTransactionCurrency
 		}
+		validateP := api.Portfolio{
+			Allocations: in.Allocations,
+			Assets:      in.Assets,
+		}
+		if err := portfolio.Validate(validateP); err != nil {
+			return ErrResult(err), nil, nil
+		}
+
 		var created api.Portfolio
 		if err := c.Post("/portfolios", body, &created); err != nil {
 			return ErrResult(err), nil, nil
@@ -150,8 +158,27 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		if len(updates) == 0 {
 			return ErrResult(fmt.Errorf("no fields provided to update")), nil, nil
 		}
+		path := "/portfolios/" + in.ID
+
+		// Validate merged state if allocation-sensitive fields are changing.
+		if in.Allocations != nil || in.Assets != nil {
+			var current api.Portfolio
+			if err := c.Get(path, &current); err != nil {
+				return ErrResult(err), nil, nil
+			}
+			if in.Allocations != nil {
+				current.Allocations = in.Allocations
+			}
+			if in.Assets != nil {
+				current.Assets = in.Assets
+			}
+			if err := portfolio.Validate(current); err != nil {
+				return ErrResult(err), nil, nil
+			}
+		}
+
 		var updated api.Portfolio
-		if err := c.MergeAndUpdate("/portfolios/"+in.ID, updates, &updated); err != nil {
+		if err := c.MergeAndUpdate(path, updates, &updated); err != nil {
 			return ErrResult(err), nil, nil
 		}
 		enriched, err := portfolio.Enrich([]api.Portfolio{updated}, c)
