@@ -124,11 +124,11 @@ var portfolioCreateCmd = &cobra.Command{
 			body["minTransactionCurrency"] = pfMinTransactionCurrency
 		}
 
-		var portfolio api.Portfolio
-		if err := client.Post("/portfolios", body, &portfolio); err != nil {
+		var created api.Portfolio
+		if err := client.Post("/portfolios", body, &created); err != nil {
 			outputError(err, 0)
 		}
-		outputJSON(portfolio)
+		outputJSON(created)
 		return nil
 	},
 }
@@ -202,7 +202,6 @@ var portfolioUpdateCmd = &cobra.Command{
 			var current api.Portfolio
 			if err := client.Get(path, &current); err != nil {
 				outputError(err, 0)
-				return nil
 			}
 			if v, ok := updates["allocations"]; ok {
 				current.Allocations = v.([]api.Allocation)

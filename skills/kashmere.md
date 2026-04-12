@@ -96,7 +96,7 @@ With assets:
 ```json
 "assets": [
   { "ticker": "VTI", "category": "US Equity",       "targetPercentage": 60 },
-  { "ticker": "VGK", "category": "US Equity",       "targetPercentage": 40 },
+  { "ticker": "VOO", "category": "US Equity",       "targetPercentage": 40 },
   { "ticker": "VCN", "category": "Canadian Equity", "targetPercentage": 100 }
 ]
 ```

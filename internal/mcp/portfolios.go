@@ -144,17 +144,39 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		Description: "Update an existing investment portfolio. Only provided fields are updated (fetch-merge-put for E2EE).",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in updatePortfolioInput) (*sdkmcp.CallToolResult, any, error) {
 		updates := map[string]any{}
-		if in.Name != nil { updates["name"] = *in.Name }
-		if in.Description != nil { updates["description"] = *in.Description }
-		if in.Institution != nil { updates["institution"] = *in.Institution }
-		if in.Owner != nil { updates["owner"] = *in.Owner }
-		if in.ManagementType != nil { updates["managementType"] = *in.ManagementType }
-		if in.GoalID != nil { updates["goalId"] = *in.GoalID }
-		if in.TotalValue != nil { updates["totalValue"] = *in.TotalValue }
-		if in.Allocations != nil { updates["allocations"] = in.Allocations }
-		if in.Assets != nil { updates["assets"] = in.Assets }
-		if in.MinTransactionAmount != nil { updates["minTransactionAmount"] = *in.MinTransactionAmount }
-		if in.MinTransactionCurrency != nil { updates["minTransactionCurrency"] = *in.MinTransactionCurrency }
+		if in.Name != nil {
+			updates["name"] = *in.Name
+		}
+		if in.Description != nil {
+			updates["description"] = *in.Description
+		}
+		if in.Institution != nil {
+			updates["institution"] = *in.Institution
+		}
+		if in.Owner != nil {
+			updates["owner"] = *in.Owner
+		}
+		if in.ManagementType != nil {
+			updates["managementType"] = *in.ManagementType
+		}
+		if in.GoalID != nil {
+			updates["goalId"] = *in.GoalID
+		}
+		if in.TotalValue != nil {
+			updates["totalValue"] = *in.TotalValue
+		}
+		if in.Allocations != nil {
+			updates["allocations"] = in.Allocations
+		}
+		if in.Assets != nil {
+			updates["assets"] = in.Assets
+		}
+		if in.MinTransactionAmount != nil {
+			updates["minTransactionAmount"] = *in.MinTransactionAmount
+		}
+		if in.MinTransactionCurrency != nil {
+			updates["minTransactionCurrency"] = *in.MinTransactionCurrency
+		}
 		if len(updates) == 0 {
 			return ErrResult(fmt.Errorf("no fields provided to update")), nil, nil
 		}
