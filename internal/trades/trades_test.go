@@ -40,8 +40,9 @@ func TestCompute_NormalRanking(t *testing.T) {
 	// VCN: 100 shares × $50 = $5000 (50% of total)
 	// VFV: 50 shares × $100 = $5000 (50% of total)
 	// Total: $10000
-	// VCN target: 60% → drift = 50 - 60 = -10% → BUY, amount = 1000
-	// VFV target: 40% → drift = 50 - 40 = +10% → SELL, amount = 1000
+	// VCN target: 60% → drift = 50 - 60 = -10% → BUY, amount = $1000
+	// VFV target: 40% → drift = 50 - 40 = +10% → SELL, amount = $1000
+	// Equal |drift|, tiebreak by ticker: VCN < VFV → VCN first
 	portfolios := []api.Portfolio{
 		{
 			ID:   "p1",
@@ -61,14 +62,10 @@ func TestCompute_NormalRanking(t *testing.T) {
 		t.Fatalf("len(recs) = %d, want 2", len(recs))
 	}
 
-	// Both have equal |drift| so order between them is stable but either can be first.
-	// Verify both are present with correct values.
-	byTicker := map[string]trades.TradeRecommendation{}
-	for _, r := range recs {
-		byTicker[r.Ticker] = r
+	vcn := recs[0]
+	if vcn.Ticker != "VCN" {
+		t.Errorf("recs[0].Ticker = %s, want VCN (alphabetic tiebreak)", vcn.Ticker)
 	}
-
-	vcn := byTicker["VCN"]
 	if vcn.Direction != "BUY" {
 		t.Errorf("VCN direction = %s, want BUY", vcn.Direction)
 	}
@@ -79,7 +76,10 @@ func TestCompute_NormalRanking(t *testing.T) {
 		t.Errorf("VCN DriftAmount = %.2f, want 1000", vcn.DriftAmount)
 	}
 
-	vfv := byTicker["VFV"]
+	vfv := recs[1]
+	if vfv.Ticker != "VFV" {
+		t.Errorf("recs[1].Ticker = %s, want VFV", vfv.Ticker)
+	}
 	if vfv.Direction != "SELL" {
 		t.Errorf("VFV direction = %s, want SELL", vfv.Direction)
 	}
@@ -257,5 +257,33 @@ func TestCompute_MultiPortfolioFlat(t *testing.T) {
 	}
 	if recs[1].PortfolioID != "p1" {
 		t.Errorf("recs[1].PortfolioID = %s, want p1", recs[1].PortfolioID)
+	}
+}
+
+func TestCompute_ZeroDrift_Skipped(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(50.0), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	// VCN: 100 × $50 = $5000, total=$5000, currentPct=100%, targetPct=100% → drift=0 → skip
+	portfolios := []api.Portfolio{
+		{
+			ID:   "p1",
+			Name: "TFSA",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "VCN", Exchange: "TSX", Quantity: 100, Currency: "CAD", TargetPercentage: ptr(100.0)},
+			},
+		},
+	}
+
+	recs, err := trades.Compute(portfolios, c)
+	if err != nil {
+		t.Fatalf("Compute: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("len(recs) = %d, want 0 (zero drift should be skipped)", len(recs))
 	}
 }

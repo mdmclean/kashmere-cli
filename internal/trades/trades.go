@@ -79,6 +79,9 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 			}
 
 			driftPct := currentPct - targetPct
+			if driftPct == 0 {
+				continue
+			}
 			driftAmount := math.Abs(driftPct / 100 * totalValue)
 
 			// Filter by minTransactionAmount if set.
@@ -112,8 +115,15 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 		}
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		return math.Abs(results[i].DriftPct) > math.Abs(results[j].DriftPct)
+	sort.SliceStable(results, func(i, j int) bool {
+		ai, aj := math.Abs(results[i].DriftPct), math.Abs(results[j].DriftPct)
+		if ai != aj {
+			return ai > aj
+		}
+		if results[i].PortfolioID != results[j].PortfolioID {
+			return results[i].PortfolioID < results[j].PortfolioID
+		}
+		return results[i].Ticker < results[j].Ticker
 	})
 
 	return results, nil
