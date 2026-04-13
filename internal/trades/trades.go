@@ -79,7 +79,7 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 			}
 
 			driftPct := currentPct - targetPct
-			if driftPct == 0 {
+			if math.Abs(driftPct) < 0.001 {
 				continue
 			}
 			driftAmount := math.Abs(driftPct / 100 * totalValue)

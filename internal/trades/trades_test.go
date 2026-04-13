@@ -287,3 +287,37 @@ func TestCompute_ZeroDrift_Skipped(t *testing.T) {
 		t.Errorf("len(recs) = %d, want 0 (zero drift should be skipped)", len(recs))
 	}
 }
+
+func TestCompute_MinTransactionFilter_USDCurrency(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(50.0), Currency: "CAD"},
+		{Ticker: "VFV", Exchange: "TSX", LatestPrice: ptr(100.0), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(2.0)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	// VCN: $5000 (50%), target=60% → drift=-10%, amount=$1000 CAD
+	// VFV: $5000 (50%), target=40% → drift=+10%, amount=$1000 CAD
+	// minTransactionAmount=600 USD → 600 × 2.0 = $1200 CAD → both $1000 trades filtered out
+	portfolios := []api.Portfolio{
+		{
+			ID:                     "p1",
+			Name:                   "TFSA",
+			MinTransactionAmount:   ptr(600.0),
+			MinTransactionCurrency: "USD",
+			Assets: []api.Asset{
+				{ID: "a1", Ticker: "VCN", Exchange: "TSX", Quantity: 100, Currency: "CAD", TargetPercentage: ptr(60.0)},
+				{ID: "a2", Ticker: "VFV", Exchange: "TSX", Quantity: 50, Currency: "CAD", TargetPercentage: ptr(40.0)},
+			},
+		},
+	}
+
+	recs, err := trades.Compute(portfolios, c)
+	if err != nil {
+		t.Fatalf("Compute: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("len(recs) = %d, want 0 (both $1000 CAD trades below $600 USD = $1200 CAD threshold)", len(recs))
+	}
+}
