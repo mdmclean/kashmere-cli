@@ -31,9 +31,10 @@ func priceKey(ticker, exchange string) string {
 	return strings.ToUpper(ticker)
 }
 
-// fxRate returns the conversion multiplier from → to.
+// FxRate returns the conversion multiplier from → to.
 // Mirrors getExchangeRate() in currency.ts.
-func fxRate(from, to string, priceMap map[string]api.TickerPrice) float64 {
+// Returns 1 if the rate is unavailable.
+func FxRate(from, to string, priceMap map[string]api.TickerPrice) float64 {
 	if from == to || from == "" {
 		return 1
 	}
@@ -51,17 +52,10 @@ func fxRate(from, to string, priceMap map[string]api.TickerPrice) float64 {
 	return 1
 }
 
-// Enrich computes TotalValue for each portfolio from its assets and live prices.
-// It mirrors enrichPortfoliosWithPrices() in usePortfolios.ts.
-//
-// Rules:
-//   - Portfolios with no assets are returned unchanged.
-//   - Static assets (CASH, GIC, PROPERTY, MUTUALFUND): value = quantity.
-//   - Traded assets: value = quantity × latestPrice (skipped if price unavailable).
-//   - All values are converted to displayCurrency (from /settings, default CAD).
-//   - If no asset in a portfolio contributes a value, the portfolio is returned unchanged.
-func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) {
-	// Collect unique non-static tickers + always include USDCAD=X.
+// FetchPrices fetches live prices for all non-static tickers across portfolios.
+// Always includes USDCAD=X. Returns a priceMap keyed by "TICKER:EXCHANGE" or "TICKER".
+// Price fetch errors are silently ignored (best-effort enrichment).
+func FetchPrices(portfolios []api.Portfolio, c *api.Client) map[string]api.TickerPrice {
 	tickerSet := map[string]struct{}{fxTickerUSDCAD: {}}
 	for _, p := range portfolios {
 		for _, a := range p.Assets {
@@ -71,7 +65,6 @@ func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) 
 		}
 	}
 
-	// Fetch prices (bulk call).
 	priceMap := map[string]api.TickerPrice{}
 	if len(tickerSet) > 0 {
 		tickers := make([]string, 0, len(tickerSet))
@@ -84,7 +77,6 @@ func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) 
 		if err := c.Get("/prices?"+params.Encode(), &prices); err == nil {
 			for _, p := range prices {
 				priceMap[priceKey(p.Ticker, p.Exchange)] = p
-				// Also index by ticker alone for fallback matching.
 				if p.Exchange != "" {
 					bare := strings.ToUpper(p.Ticker)
 					if _, exists := priceMap[bare]; !exists {
@@ -93,10 +85,58 @@ func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) 
 				}
 			}
 		}
-		// Intentionally ignore price fetch errors — best-effort enrichment.
+	}
+	return priceMap
+}
+
+// ComputeAssetValue returns the asset's value in displayCurrency.
+// Returns (value, true) when a price was available; (0, false) when not (traded asset with no price).
+// Static assets (CASH, GIC, PROPERTY, MUTUALFUND) always return (quantity×rate, true).
+func ComputeAssetValue(a api.Asset, priceMap map[string]api.TickerPrice, displayCurrency string) (float64, bool) {
+	var assetValue float64
+	var assetCurrency string
+
+	if isStatic(a.Ticker) {
+		assetValue = a.Quantity
+		assetCurrency = a.Currency
+		if assetCurrency == "" {
+			assetCurrency = displayCurrency
+		}
+	} else {
+		key := priceKey(a.Ticker, a.Exchange)
+		priceData, ok := priceMap[key]
+		if !ok {
+			priceData, ok = priceMap[strings.ToUpper(a.Ticker)]
+		}
+		if !ok || priceData.LatestPrice == nil {
+			return 0, false
+		}
+		assetValue = a.Quantity * *priceData.LatestPrice
+		assetCurrency = a.Currency
+		if assetCurrency == "" {
+			assetCurrency = priceData.Currency
+		}
+		if assetCurrency == "" {
+			assetCurrency = "USD"
+		}
 	}
 
-	// Fetch displayCurrency from settings; default to CAD on failure.
+	rate := FxRate(assetCurrency, displayCurrency, priceMap)
+	return assetValue * rate, true
+}
+
+// Enrich computes TotalValue for each portfolio from its assets and live prices.
+// It mirrors enrichPortfoliosWithPrices() in usePortfolios.ts.
+//
+// Rules:
+//   - Portfolios with no assets are returned unchanged.
+//   - Static assets (CASH, GIC, PROPERTY, MUTUALFUND): value = quantity.
+//   - Traded assets: value = quantity × latestPrice (skipped if price unavailable).
+//   - All values are converted to displayCurrency (from /settings, default CAD).
+//   - If no asset in a portfolio contributes a value, the portfolio is returned unchanged.
+func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) {
+	priceMap := FetchPrices(portfolios, c)
+
 	displayCurrency := "CAD"
 	var settings api.Settings
 	if err := c.Get("/settings", &settings); err == nil && settings.DisplayCurrency != "" {
@@ -114,39 +154,11 @@ func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) 
 		hasAnyPrice := false
 
 		for _, a := range p.Assets {
-			var assetValue float64
-			var assetCurrency string
-
-			if isStatic(a.Ticker) {
-				assetValue = a.Quantity
-				assetCurrency = a.Currency
-				if assetCurrency == "" {
-					assetCurrency = displayCurrency
-				}
+			val, ok := ComputeAssetValue(a, priceMap, displayCurrency)
+			if ok {
 				hasAnyPrice = true
-			} else {
-				key := priceKey(a.Ticker, a.Exchange)
-				priceData, ok := priceMap[key]
-				if !ok {
-					// Try bare ticker fallback.
-					priceData, ok = priceMap[strings.ToUpper(a.Ticker)]
-				}
-				if !ok || priceData.LatestPrice == nil {
-					continue
-				}
-				assetValue = a.Quantity * *priceData.LatestPrice
-				assetCurrency = a.Currency
-				if assetCurrency == "" {
-					assetCurrency = priceData.Currency
-				}
-				if assetCurrency == "" {
-					assetCurrency = "USD" // traded assets default to USD
-				}
-				hasAnyPrice = true
+				total += val
 			}
-
-			rate := fxRate(assetCurrency, displayCurrency, priceMap)
-			total += assetValue * rate
 		}
 
 		if !hasAnyPrice {

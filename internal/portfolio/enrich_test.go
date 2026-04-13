@@ -2,6 +2,7 @@ package portfolio_test
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -257,5 +258,91 @@ func TestEnrich_MultiplePortfolios(t *testing.T) {
 	}
 	if got[1].TotalValue != 25000 {
 		t.Errorf("p2 TotalValue = %.2f, want 25000", got[1].TotalValue)
+	}
+}
+
+func TestFxRate_SameCurrency(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{
+		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}
+	if got := portfolio.FxRate("CAD", "CAD", priceMap); got != 1.0 {
+		t.Errorf("FxRate CAD→CAD = %.4f, want 1.0", got)
+	}
+}
+
+func TestFxRate_USDToCAD(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{
+		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}
+	if got := portfolio.FxRate("USD", "CAD", priceMap); got != 1.38 {
+		t.Errorf("FxRate USD→CAD = %.4f, want 1.38", got)
+	}
+}
+
+func TestFxRate_CADToUSD(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{
+		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}
+	got := portfolio.FxRate("CAD", "USD", priceMap)
+	want := 1.0 / 1.38
+	if math.Abs(got-want) > 0.0001 {
+		t.Errorf("FxRate CAD→USD = %.6f, want %.6f", got, want)
+	}
+}
+
+func TestFxRate_MissingRate_ReturnsOne(t *testing.T) {
+	if got := portfolio.FxRate("USD", "CAD", map[string]api.TickerPrice{}); got != 1.0 {
+		t.Errorf("FxRate missing rate = %.4f, want 1.0", got)
+	}
+}
+
+func TestComputeAssetValue_StaticCAD(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{}
+	a := api.Asset{Ticker: "CASH", Quantity: 10000, Currency: "CAD"}
+	val, ok := portfolio.ComputeAssetValue(a, priceMap, "CAD")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if val != 10000 {
+		t.Errorf("val = %.2f, want 10000", val)
+	}
+}
+
+func TestComputeAssetValue_StaticUSDtoCAD(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{
+		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}
+	a := api.Asset{Ticker: "CASH", Quantity: 1000, Currency: "USD"}
+	val, ok := portfolio.ComputeAssetValue(a, priceMap, "CAD")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if val != 1380 {
+		t.Errorf("val = %.2f, want 1380", val)
+	}
+}
+
+func TestComputeAssetValue_TradedNoPriceReturnsFalse(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{}
+	a := api.Asset{Ticker: "VCN", Exchange: "TSX", Quantity: 10}
+	_, ok := portfolio.ComputeAssetValue(a, priceMap, "CAD")
+	if ok {
+		t.Error("ok = true, want false for missing price")
+	}
+}
+
+func TestComputeAssetValue_TradedUSDtoCAD(t *testing.T) {
+	priceMap := map[string]api.TickerPrice{
+		"VFV:TSX":  {Ticker: "VFV", Exchange: "TSX", LatestPrice: ptr(150.0), Currency: "USD"},
+		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}
+	a := api.Asset{Ticker: "VFV", Exchange: "TSX", Quantity: 10, Currency: "USD"}
+	val, ok := portfolio.ComputeAssetValue(a, priceMap, "CAD")
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	want := 10 * 150.0 * 1.38
+	if math.Abs(val-want) > 0.001 {
+		t.Errorf("val = %.4f, want %.4f", val, want)
 	}
 }
