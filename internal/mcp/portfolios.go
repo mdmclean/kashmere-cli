@@ -7,6 +7,7 @@ import (
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/mdmclean/kashmere-cli/internal/portfolio"
+	"github.com/mdmclean/kashmere-cli/internal/trades"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -222,5 +223,32 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 			return ErrResult(err), nil, nil
 		}
 		return TextResult("Portfolio deleted successfully."), nil, nil
+	})
+
+	// get_top_trades
+	type getTopTradesInput struct {
+		PortfolioID *string `json:"portfolioId,omitempty" jsonschema:"Optional portfolio ID; omit to rank across all portfolios"`
+	}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "get_top_trades",
+		Description: "Get ranked BUY/SELL trade recommendations for a portfolio (or all portfolios) based on drift from target allocations.",
+	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getTopTradesInput) (*sdkmcp.CallToolResult, any, error) {
+		var portfolios []api.Portfolio
+		if in.PortfolioID != nil && *in.PortfolioID != "" {
+			var p api.Portfolio
+			if err := c.Get("/portfolios/"+*in.PortfolioID, &p); err != nil {
+				return ErrResult(err), nil, nil
+			}
+			portfolios = []api.Portfolio{p}
+		} else {
+			if err := c.Get("/portfolios", &portfolios); err != nil {
+				return ErrResult(err), nil, nil
+			}
+		}
+		recs, err := trades.Compute(portfolios, c)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(recs), nil, nil
 	})
 }
