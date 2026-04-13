@@ -8,6 +8,7 @@ import (
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
 	"github.com/mdmclean/kashmere-cli/internal/portfolio"
+	"github.com/mdmclean/kashmere-cli/internal/trades"
 	"github.com/spf13/cobra"
 )
 
@@ -223,6 +224,33 @@ var portfolioUpdateCmd = &cobra.Command{
 	},
 }
 
+var portfolioTopTradesCmd = &cobra.Command{
+	Use:   "top-trades [portfolioId]",
+	Short: "Get ranked BUY/SELL trade recommendations based on drift from target allocations",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := api.New(cfg.APIBaseURL, cfg.APIKey, encKey)
+		var portfolios []api.Portfolio
+		if len(args) == 1 {
+			var p api.Portfolio
+			if err := client.Get("/portfolios/"+args[0], &p); err != nil {
+				outputError(err, 0)
+			}
+			portfolios = []api.Portfolio{p}
+		} else {
+			if err := client.Get("/portfolios", &portfolios); err != nil {
+				outputError(err, 0)
+			}
+		}
+		recs, err := trades.Compute(portfolios, client)
+		if err != nil {
+			outputError(err, 0)
+		}
+		outputJSON(recs)
+		return nil
+	},
+}
+
 func init() {
 	// create flags
 	portfolioCreateCmd.Flags().StringVar(&pfName, "name", "", "Portfolio name (required)")
@@ -254,6 +282,6 @@ func init() {
 	portfolioUpdateCmd.Flags().StringVar(&pfAllocationsJSON, "allocations", "", "New allocations JSON")
 	portfolioUpdateCmd.Flags().StringVar(&pfAssetsJSON, "assets", "", "New assets JSON")
 
-	portfolioCmd.AddCommand(portfolioListCmd, portfolioGetCmd, portfolioCreateCmd, portfolioUpdateCmd)
+	portfolioCmd.AddCommand(portfolioListCmd, portfolioGetCmd, portfolioCreateCmd, portfolioUpdateCmd, portfolioTopTradesCmd)
 	rootCmd.AddCommand(portfolioCmd)
 }
