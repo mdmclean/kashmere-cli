@@ -84,6 +84,133 @@ func (c *Client) Put(path string, body any, result any) error {
 	return c.write("PUT", path, body, result)
 }
 
+// GetSnapshots fetches and decrypts portfolio snapshots.
+// Unlike other encrypted resources, snapshot encryption only covers financial
+// fields (totalValue); metadata (portfolioId, timestamp) stays plaintext so
+// the server can filter without decrypting.
+func (c *Client) GetSnapshots(path string, result any) error {
+	resp, err := c.do("GET", path, nil)
+	if err != nil {
+		return err
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 400 {
+		return parseAPIError(resp.StatusCode, body)
+	}
+	if c.encKey == nil {
+		return json.Unmarshal(body, result)
+	}
+	return c.decryptSnapshotResponse(json.RawMessage(body), result)
+}
+
+// PostSnapshot creates a snapshot with encryption that preserves portfolioId
+// and timestamp as plaintext for server-side date filtering, while encrypting
+// the financial value (totalValue).
+func (c *Client) PostSnapshot(portfolioID, timestamp string, totalValue float64) error {
+	dateStr := timestamp
+	if len(dateStr) >= 10 {
+		dateStr = dateStr[:10]
+	}
+	id := "snapshot-" + portfolioID + "-" + dateStr
+
+	var body map[string]any
+	if c.encKey != nil {
+		sensitive := map[string]any{"totalValue": totalValue}
+		sensitiveJSON, err := json.Marshal(sensitive)
+		if err != nil {
+			return err
+		}
+		ciphertext, err := crypto.Encrypt(c.encKey, string(sensitiveJSON))
+		if err != nil {
+			return err
+		}
+		body = map[string]any{
+			"id":          id,
+			"portfolioId": portfolioID,
+			"timestamp":   timestamp,
+			"_encrypted":  ciphertext,
+		}
+	} else {
+		body = map[string]any{
+			"id":          id,
+			"portfolioId": portfolioID,
+			"timestamp":   timestamp,
+			"totalValue":  totalValue,
+		}
+	}
+
+	resp, err := c.do("POST", "/history/snapshots", body)
+	if err != nil {
+		return err
+	}
+	io.ReadAll(resp.Body) //nolint:errcheck
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("snapshot creation failed: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// decryptSnapshotResponse decrypts an array or single snapshot response.
+func (c *Client) decryptSnapshotResponse(raw json.RawMessage, result any) error {
+	var arr []json.RawMessage
+	if json.Unmarshal(raw, &arr) == nil {
+		resultSlice := make([]json.RawMessage, len(arr))
+		for i, item := range arr {
+			dec, err := c.decryptSnapshotDoc(item)
+			if err != nil {
+				return err
+			}
+			resultSlice[i] = json.RawMessage(dec)
+		}
+		combined, err := json.Marshal(resultSlice)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(combined, result)
+	}
+	dec, err := c.decryptSnapshotDoc(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal([]byte(dec), result)
+}
+
+// decryptSnapshotDoc decrypts a single snapshot document, merging plaintext
+// metadata (id, accountId, portfolioId, timestamp) with the decrypted financial
+// fields (totalValue). Falls back gracefully for unencrypted legacy snapshots.
+func (c *Client) decryptSnapshotDoc(raw json.RawMessage) (string, error) {
+	var wrapper struct {
+		Encrypted string `json:"_encrypted"`
+	}
+	if err := json.Unmarshal(raw, &wrapper); err != nil || wrapper.Encrypted == "" {
+		return string(raw), nil // unencrypted legacy snapshot — return as-is
+	}
+	plaintext, err := crypto.Decrypt(c.encKey, wrapper.Encrypted)
+	if err != nil {
+		return "", fmt.Errorf("decrypt snapshot: %w", err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(plaintext), &obj); err != nil {
+		return "", err
+	}
+	// Merge plaintext metadata from the outer document
+	var outer map[string]any
+	if err := json.Unmarshal(raw, &outer); err == nil {
+		for k, v := range outer {
+			if k != "_encrypted" {
+				obj[k] = v
+			}
+		}
+	}
+	out, err := json.Marshal(obj)
+	return string(out), err
+}
+
 // Delete makes an authenticated DELETE request.
 func (c *Client) Delete(path string) error {
 	resp, err := c.do("DELETE", path, nil)

@@ -3,9 +3,12 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -32,7 +35,7 @@ func registerHistoryTools(server *sdkmcp.Server, c *api.Client) {
 			path += "?" + params.Encode()
 		}
 		var snapshots []api.PortfolioSnapshot
-		if err := c.Get(path, &snapshots); err != nil {
+		if err := c.GetSnapshots(path, &snapshots); err != nil {
 			return ErrResult(err), nil, nil
 		}
 		if in.PortfolioID != nil {
@@ -53,16 +56,52 @@ func registerHistoryTools(server *sdkmcp.Server, c *api.Client) {
 	}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "create_snapshot",
-		Description: "Create a portfolio snapshot. If portfolioId is omitted, creates snapshots for all portfolios.",
+		Description: "Create a portfolio value snapshot using live prices. If portfolioId is omitted, creates snapshots for all portfolios.",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in createSnapshotInput) (*sdkmcp.CallToolResult, any, error) {
-		body := map[string]any{}
-		if in.PortfolioID != nil {
-			body["portfolioId"] = *in.PortfolioID
+		// Fetch the relevant portfolios
+		var portfolios []api.Portfolio
+		if in.PortfolioID != nil && *in.PortfolioID != "" {
+			var p api.Portfolio
+			if err := c.Get("/portfolios/"+*in.PortfolioID, &p); err != nil {
+				return ErrResult(err), nil, nil
+			}
+			portfolios = []api.Portfolio{p}
+		} else {
+			if err := c.Get("/portfolios", &portfolios); err != nil {
+				return ErrResult(err), nil, nil
+			}
 		}
-		var result any
-		if err := c.Post("/history/snapshots", body, &result); err != nil {
+
+		// Enrich with live prices to compute current totalValue
+		enriched, err := portfolio.Enrich(portfolios, c)
+		if err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(result), nil, nil
+
+		timestamp := time.Now().UTC().Format(time.RFC3339)
+		type snapshotResult struct {
+			ID          string  `json:"id"`
+			PortfolioID string  `json:"portfolioId"`
+			Timestamp   string  `json:"timestamp"`
+			TotalValue  float64 `json:"totalValue"`
+		}
+		var created []snapshotResult
+		for _, p := range enriched {
+			if err := c.PostSnapshot(p.ID, timestamp, p.TotalValue); err != nil {
+				return ErrResult(fmt.Errorf("snapshot for %q: %w", p.Name, err)), nil, nil
+			}
+			dateStr := timestamp[:10]
+			created = append(created, snapshotResult{
+				ID:          "snapshot-" + p.ID + "-" + dateStr,
+				PortfolioID: p.ID,
+				Timestamp:   timestamp,
+				TotalValue:  p.TotalValue,
+			})
+		}
+
+		if len(created) == 1 {
+			return JSONResult(created[0]), nil, nil
+		}
+		return JSONResult(created), nil, nil
 	})
 }

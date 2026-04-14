@@ -30,7 +30,7 @@ var historyCmd = &cobra.Command{
 		}
 
 		var snapshots []api.PortfolioSnapshot
-		if err := client.Get(path, &snapshots); err != nil {
+		if err := client.GetSnapshots(path, &snapshots); err != nil {
 			outputError(err, 0)
 		}
 
