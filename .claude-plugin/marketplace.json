@@ -1,0 +1,13 @@
+{
+  "name": "kashmere-cli",
+  "owner": {
+    "name": "mdmclean"
+  },
+  "plugins": [
+    {
+      "name": "kashmere",
+      "source": "./",
+      "description": "Kashmere financial planning CLI and MCP server skill"
+    }
+  ]
+}
