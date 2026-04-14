@@ -26,7 +26,7 @@ var portfolioListCmd = &cobra.Command{
 		if err := client.Get("/portfolios", &portfolios); err != nil {
 			outputError(err, 0)
 		}
-		enriched, err := portfolio.Enrich(portfolios, client)
+		enriched, err := portfolio.EnrichFull(portfolios, client)
 		if err != nil {
 			outputError(err, 0)
 		}
@@ -45,7 +45,7 @@ var portfolioGetCmd = &cobra.Command{
 		if err := client.Get("/portfolios/"+args[0], &p); err != nil {
 			outputError(err, 0)
 		}
-		enriched, err := portfolio.Enrich([]api.Portfolio{p}, client)
+		enriched, err := portfolio.EnrichFull([]api.Portfolio{p}, client)
 		if err != nil {
 			outputError(err, 0)
 		}
