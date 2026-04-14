@@ -233,18 +233,23 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		Name: "get_top_trades",
 		Description: `Get ranked BUY/SELL trade recommendations based on how far each asset has drifted from its target allocation.
 
-Results are ACTIONABLE trades only — not every drifting asset will appear:
+Response shape:
+- trades: ranked actionable BUY/SELL recommendations
+- suppressedBuys: underweight positions that cannot be acted on due to insufficient cash
+
+Each suppressedBuy includes ticker, assetName, driftPct, driftAmount, and reason:
+- no_cash: portfolio holds no cash
+- below_min_transaction: available cash is less than the minimum transaction amount
+- cash_needs_replenishing: portfolio cash is below its own target weight
 
 BUYs are suppressed when:
 - The portfolio holds no cash (nothing to deploy)
 - Available cash is below the portfolio's minimum transaction amount
 - The portfolio's cash is itself below its target weight (it needs replenishing before other assets are bought)
 
-When cash is present but insufficient for all BUYs, the highest-drift BUYs are funded first. A BUY may appear with a reduced amount (isPartialBuy=true) if cash only partially covers it; lower-priority BUYs are omitted.
+When cash is present but insufficient for all BUYs, the highest-drift BUYs are funded first. A BUY may appear with a reduced amount (isPartialBuy=true) if cash only partially covers it; lower-priority BUYs are moved to suppressedBuys.
 
-SELLs always appear regardless of cash.
-
-IMPORTANT: An empty BUY list does NOT mean there are no underweight assets — it means there is no available cash to act on them. Use list_portfolios or get_portfolio to check cash holdings before concluding a portfolio is balanced.`,
+SELLs always appear in trades regardless of cash.`,
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getTopTradesInput) (*sdkmcp.CallToolResult, any, error) {
 		var portfolios []api.Portfolio
 		if in.PortfolioID != nil && *in.PortfolioID != "" {
@@ -258,10 +263,10 @@ IMPORTANT: An empty BUY list does NOT mean there are no underweight assets — i
 				return ErrResult(err), nil, nil
 			}
 		}
-		recs, err := trades.Compute(portfolios, c)
+		result, err := trades.Compute(portfolios, c)
 		if err != nil {
 			return ErrResult(err), nil, nil
 		}
-		return JSONResult(recs), nil, nil
+		return JSONResult(result), nil, nil
 	})
 }

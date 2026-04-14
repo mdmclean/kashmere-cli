@@ -70,12 +70,12 @@ func TestCompute_EffectiveTargetFromAllocation(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (GIC is perfectly on target at 100%% of 100%% allocation)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (GIC is perfectly on target at 100%% of 100%% allocation)", len(result.Trades))
 	}
 }
 
@@ -121,17 +121,17 @@ func TestCompute_EffectiveTargetScaledByAllocation(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c2)
+	result, err := trades.Compute(portfolios, c2)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
 	// GIC: effectiveTarget=5%, currentPct=5000/100000*100=5% → drift≈0 → skip
 	// VCN: effectiveTarget=95%, currentPct=95000/100000*100=95% → drift≈0 → skip
-	if len(recs) != 0 {
-		for _, r := range recs {
+	if len(result.Trades) != 0 {
+		for _, r := range result.Trades {
 			t.Logf("unexpected rec: %s drift=%.2f%% (target=%.2f%% current=%.2f%%)", r.Ticker, r.DriftPct, r.TargetPct, r.CurrentPct)
 		}
-		t.Errorf("len(recs) = %d, want 0 (both assets on target when effectiveTarget is scaled by allocation)", len(recs))
+		t.Errorf("len(result.Trades) = %d, want 0 (both assets on target when effectiveTarget is scaled by allocation)", len(result.Trades))
 	}
 	_ = srv // suppress unused warning
 	_ = c
@@ -175,17 +175,17 @@ func TestCompute_NormalRanking(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 2 {
-		t.Fatalf("len(recs) = %d, want 2", len(recs))
+	if len(result.Trades) != 2 {
+		t.Fatalf("len(result.Trades) = %d, want 2", len(result.Trades))
 	}
 
-	vcn := recs[0]
+	vcn := result.Trades[0]
 	if vcn.Ticker != "VCN" {
-		t.Errorf("recs[0].Ticker = %s, want VCN (alphabetic tiebreak)", vcn.Ticker)
+		t.Errorf("result.Trades[0].Ticker = %s, want VCN (alphabetic tiebreak)", vcn.Ticker)
 	}
 	if vcn.Direction != "SELL" {
 		t.Errorf("VCN direction = %s, want SELL", vcn.Direction)
@@ -200,9 +200,9 @@ func TestCompute_NormalRanking(t *testing.T) {
 		t.Errorf("VCN DriftAmount = %.2f, want 1000", vcn.DriftAmount)
 	}
 
-	vfv := recs[1]
+	vfv := result.Trades[1]
 	if vfv.Ticker != "VFV" {
-		t.Errorf("recs[1].Ticker = %s, want VFV", vfv.Ticker)
+		t.Errorf("result.Trades[1].Ticker = %s, want VFV", vfv.Ticker)
 	}
 	if vfv.Direction != "SELL" {
 		t.Errorf("VFV direction = %s, want SELL", vfv.Direction)
@@ -246,18 +246,18 @@ func TestCompute_CashAssetsSkipped(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Ticker == "CASH" {
 			t.Errorf("CASH appeared in results — it must always be excluded")
 		}
 	}
 	// VCN should still appear
-	if len(recs) != 1 || recs[0].Ticker != "VCN" {
-		t.Errorf("expected exactly 1 rec (VCN), got %d", len(recs))
+	if len(result.Trades) != 1 || result.Trades[0].Ticker != "VCN" {
+		t.Errorf("expected exactly 1 rec (VCN), got %d", len(result.Trades))
 	}
 }
 
@@ -289,11 +289,11 @@ func TestCompute_NullTargetSkipped(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Ticker == "VCN" {
 			t.Errorf("VCN (null targetPercentage) appeared in results — it must be skipped")
 		}
@@ -322,12 +322,12 @@ func TestCompute_NoTargets_PortfolioSkipped(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (no targets defined)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (no targets defined)", len(result.Trades))
 	}
 }
 
@@ -364,12 +364,12 @@ func TestCompute_MinTransactionFilter(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (all below min transaction)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (all below min transaction)", len(result.Trades))
 	}
 }
 
@@ -398,12 +398,12 @@ func TestCompute_ZeroTotalValue_PortfolioSkipped(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (zero total value)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (zero total value)", len(result.Trades))
 	}
 }
 
@@ -445,18 +445,18 @@ func TestCompute_MultiPortfolioFlat(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 2 {
-		t.Fatalf("len(recs) = %d, want 2", len(recs))
+	if len(result.Trades) != 2 {
+		t.Fatalf("len(result.Trades) = %d, want 2", len(result.Trades))
 	}
-	if recs[0].PortfolioID != "p2" {
-		t.Errorf("recs[0].PortfolioID = %s, want p2 (higher drift)", recs[0].PortfolioID)
+	if result.Trades[0].PortfolioID != "p2" {
+		t.Errorf("result.Trades[0].PortfolioID = %s, want p2 (higher drift)", result.Trades[0].PortfolioID)
 	}
-	if recs[1].PortfolioID != "p1" {
-		t.Errorf("recs[1].PortfolioID = %s, want p1", recs[1].PortfolioID)
+	if result.Trades[1].PortfolioID != "p1" {
+		t.Errorf("result.Trades[1].PortfolioID = %s, want p1", result.Trades[1].PortfolioID)
 	}
 }
 
@@ -488,12 +488,12 @@ func TestCompute_ZeroDrift_Skipped(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (zero drift should be skipped)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (zero drift should be skipped)", len(result.Trades))
 	}
 }
 
@@ -530,12 +530,12 @@ func TestCompute_MinTransactionFilter_USDCurrency(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		t.Errorf("len(recs) = %d, want 0 (both $1000 CAD trades below $600 USD = $1200 CAD threshold)", len(recs))
+	if len(result.Trades) != 0 {
+		t.Errorf("len(result.Trades) = %d, want 0 (both $1000 CAD trades below $600 USD = $1200 CAD threshold)", len(result.Trades))
 	}
 }
 
@@ -571,21 +571,21 @@ func TestCompute_CategoryNotInAllocations(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 1 {
-		t.Fatalf("len(recs) = %d, want 1", len(recs))
+	if len(result.Trades) != 1 {
+		t.Fatalf("len(result.Trades) = %d, want 1", len(result.Trades))
 	}
-	if recs[0].Ticker != "VCN" {
-		t.Errorf("ticker = %s, want VCN", recs[0].Ticker)
+	if result.Trades[0].Ticker != "VCN" {
+		t.Errorf("ticker = %s, want VCN", result.Trades[0].Ticker)
 	}
-	if recs[0].Direction != "SELL" {
-		t.Errorf("direction = %s, want SELL (effective target is 0%%)", recs[0].Direction)
+	if result.Trades[0].Direction != "SELL" {
+		t.Errorf("direction = %s, want SELL (effective target is 0%%)", result.Trades[0].Direction)
 	}
-	if math.Abs(recs[0].TargetPct) > 0.001 {
-		t.Errorf("TargetPct = %.4f, want 0 (no matching category)", recs[0].TargetPct)
+	if math.Abs(result.Trades[0].TargetPct) > 0.001 {
+		t.Errorf("TargetPct = %.4f, want 0 (no matching category)", result.Trades[0].TargetPct)
 	}
 }
 
@@ -621,24 +621,24 @@ func TestCompute_BuyIncludedWhenCashAvailable(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 1 {
-		t.Fatalf("len(recs) = %d, want 1 (VCN BUY funded by cash)", len(recs))
+	if len(result.Trades) != 1 {
+		t.Fatalf("len(result.Trades) = %d, want 1 (VCN BUY funded by cash)", len(result.Trades))
 	}
-	if recs[0].Ticker != "VCN" {
-		t.Errorf("ticker = %s, want VCN", recs[0].Ticker)
+	if result.Trades[0].Ticker != "VCN" {
+		t.Errorf("ticker = %s, want VCN", result.Trades[0].Ticker)
 	}
-	if recs[0].Direction != "BUY" {
-		t.Errorf("direction = %s, want BUY", recs[0].Direction)
+	if result.Trades[0].Direction != "BUY" {
+		t.Errorf("direction = %s, want BUY", result.Trades[0].Direction)
 	}
-	if recs[0].IsPartialBuy {
+	if result.Trades[0].IsPartialBuy {
 		t.Errorf("IsPartialBuy = true, want false (cash fully covers the trade)")
 	}
-	if math.Abs(recs[0].DriftAmount-2000) > 0.01 {
-		t.Errorf("DriftAmount = %.2f, want 2000", recs[0].DriftAmount)
+	if math.Abs(result.Trades[0].DriftAmount-2000) > 0.01 {
+		t.Errorf("DriftAmount = %.2f, want 2000", result.Trades[0].DriftAmount)
 	}
 }
 
@@ -672,17 +672,17 @@ func TestCompute_BuySuppressedWhenNoCash(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Direction == "BUY" {
 			t.Errorf("unexpected BUY for %s: no cash in portfolio, BUYs must be suppressed", r.Ticker)
 		}
 	}
 	found := false
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Ticker == "VFV" && r.Direction == "SELL" {
 			found = true
 		}
@@ -727,17 +727,17 @@ func TestCompute_BuySuppressedWhenCashBelowTarget(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Direction == "BUY" {
 			t.Errorf("unexpected BUY for %s: cash is below its target, BUYs should be suppressed", r.Ticker)
 		}
 	}
 	found := false
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Ticker == "VFV" && r.Direction == "SELL" {
 			found = true
 		}
@@ -790,15 +790,15 @@ func TestCompute_BuyPartiallyFunded(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c2)
+	result, err := trades.Compute(portfolios, c2)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
 
 	var vcnRec *trades.TradeRecommendation
-	for i, r := range recs {
+	for i, r := range result.Trades {
 		if r.Ticker == "VCN" {
-			vcnRec = &recs[i]
+			vcnRec = &result.Trades[i]
 		}
 	}
 	if vcnRec == nil {
@@ -849,13 +849,13 @@ func TestCompute_BuyPriorityFunding(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
 
 	hasBuyVCN, hasBuyVFV := false, false
-	for _, r := range recs {
+	for _, r := range result.Trades {
 		if r.Direction == "BUY" {
 			switch r.Ticker {
 			case "VCN":
@@ -892,7 +892,7 @@ func TestCompute_BuySuppressedWhenCashBelowMinTransaction(t *testing.T) {
 	// VFV: 55 × $100 = $5500 (55%), alloc USEquity=50%, drift=+5%, amount=$500
 	//   → filtered by per-asset min filter ($500 < $1000) — never reaches cash check
 	// CASH: quantity=500 < minAmt=$1000 → cash guard suppresses all BUYs
-	// Expected: 0 recs
+	// Expected: 0 result.Trades
 	portfolios := []api.Portfolio{
 		{
 			ID:                     "p1",
@@ -911,14 +911,14 @@ func TestCompute_BuySuppressedWhenCashBelowMinTransaction(t *testing.T) {
 		},
 	}
 
-	recs, err := trades.Compute(portfolios, c)
+	result, err := trades.Compute(portfolios, c)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if len(recs) != 0 {
-		for _, r := range recs {
+	if len(result.Trades) != 0 {
+		for _, r := range result.Trades {
 			t.Logf("unexpected rec: %s %s amount=%.2f", r.Direction, r.Ticker, r.DriftAmount)
 		}
-		t.Errorf("len(recs) = %d, want 0 (cash $500 < minTransaction $1000 → BUY suppressed, SELL below min filtered)", len(recs))
+		t.Errorf("len(result.Trades) = %d, want 0 (cash $500 < minTransaction $1000 → BUY suppressed, SELL below min filtered)", len(result.Trades))
 	}
 }

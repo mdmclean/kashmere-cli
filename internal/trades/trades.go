@@ -25,6 +25,27 @@ type TradeRecommendation struct {
 	Currency      string  `json:"currency"`     // display currency
 }
 
+// SuppressedBuy is an underweight asset that cannot be acted on due to
+// insufficient cash. Reason is one of: "no_cash", "below_min_transaction",
+// "cash_needs_replenishing".
+type SuppressedBuy struct {
+	PortfolioID   string  `json:"portfolioId"`
+	PortfolioName string  `json:"portfolioName"`
+	Ticker        string  `json:"ticker"`
+	AssetName     string  `json:"assetName"`
+	DriftPct      float64 `json:"driftPct"`
+	DriftAmount   float64 `json:"driftAmount"`
+	Reason        string  `json:"reason"`
+	Currency      string  `json:"currency"`
+}
+
+// ComputeResult holds actionable trade recommendations and the buys that were
+// suppressed due to insufficient cash.
+type ComputeResult struct {
+	Trades         []TradeRecommendation `json:"trades"`
+	SuppressedBuys []SuppressedBuy       `json:"suppressedBuys"`
+}
+
 // resolveEffectiveAssetTarget mirrors resolveEffectiveAssetTarget in trade-calculations.ts.
 //
 // asset.TargetPercentage is a within-category percentage, not a portfolio percentage.
@@ -62,7 +83,7 @@ func resolveEffectiveAssetTarget(asset api.Asset, allocations []api.Allocation) 
 //   - BUYs are funded in priority order (highest |drift| first) against available cash.
 //   - A BUY is included only if there is at least minTransactionAmount of cash remaining.
 //   - A BUY may be partially filled (IsPartialBuy=true) if cash covers it only in part.
-func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, error) {
+func Compute(portfolios []api.Portfolio, c *api.Client) (ComputeResult, error) {
 	displayCurrency := "CAD"
 	var settings api.Settings
 	if err := c.Get("/settings", &settings); err == nil && settings.DisplayCurrency != "" {
@@ -72,6 +93,7 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 	priceMap := portfolio.FetchPrices(portfolios, c)
 
 	var results []TradeRecommendation
+	var suppressed []SuppressedBuy
 
 	for _, p := range portfolios {
 		// Skip portfolios with no target percentages defined at all.
@@ -203,11 +225,50 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 
 		// Cash is below its own target allocation — don't deploy cash into other assets.
 		if cashBelowTarget {
+			for _, b := range buys {
+				suppressed = append(suppressed, SuppressedBuy{
+					PortfolioID:   b.PortfolioID,
+					PortfolioName: b.PortfolioName,
+					Ticker:        b.Ticker,
+					AssetName:     b.AssetName,
+					DriftPct:      b.DriftPct,
+					DriftAmount:   b.DriftAmount,
+					Reason:        "cash_needs_replenishing",
+					Currency:      b.Currency,
+				})
+			}
 			continue
 		}
 
 		// Not enough cash to meet minimum transaction threshold — skip all buys.
-		if portfolioCash <= 0 || (minAmtDisplay > 0 && portfolioCash < minAmtDisplay) {
+		if portfolioCash <= 0 {
+			for _, b := range buys {
+				suppressed = append(suppressed, SuppressedBuy{
+					PortfolioID:   b.PortfolioID,
+					PortfolioName: b.PortfolioName,
+					Ticker:        b.Ticker,
+					AssetName:     b.AssetName,
+					DriftPct:      b.DriftPct,
+					DriftAmount:   b.DriftAmount,
+					Reason:        "no_cash",
+					Currency:      b.Currency,
+				})
+			}
+			continue
+		}
+		if minAmtDisplay > 0 && portfolioCash < minAmtDisplay {
+			for _, b := range buys {
+				suppressed = append(suppressed, SuppressedBuy{
+					PortfolioID:   b.PortfolioID,
+					PortfolioName: b.PortfolioName,
+					Ticker:        b.Ticker,
+					AssetName:     b.AssetName,
+					DriftPct:      b.DriftPct,
+					DriftAmount:   b.DriftAmount,
+					Reason:        "below_min_transaction",
+					Currency:      b.Currency,
+				})
+			}
 			continue
 		}
 
@@ -227,8 +288,23 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 				rec.IsPartialBuy = true
 				results = append(results, rec)
 				cashRemaining = 0
+			} else {
+				// No usable cash left for this buy.
+				reason := "no_cash"
+				if cashRemaining > 0 {
+					reason = "below_min_transaction"
+				}
+				suppressed = append(suppressed, SuppressedBuy{
+					PortfolioID:   rec.PortfolioID,
+					PortfolioName: rec.PortfolioName,
+					Ticker:        rec.Ticker,
+					AssetName:     rec.AssetName,
+					DriftPct:      rec.DriftPct,
+					DriftAmount:   rec.DriftAmount,
+					Reason:        reason,
+					Currency:      rec.Currency,
+				})
 			}
-			// else: no cash left — omit this BUY entirely.
 		}
 	}
 
@@ -243,5 +319,12 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 		return results[i].Ticker < results[j].Ticker
 	})
 
-	return results, nil
+	if suppressed == nil {
+		suppressed = []SuppressedBuy{}
+	}
+	if results == nil {
+		results = []TradeRecommendation{}
+	}
+
+	return ComputeResult{Trades: results, SuppressedBuys: suppressed}, nil
 }
