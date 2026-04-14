@@ -125,6 +125,39 @@ func ComputeAssetValue(a api.Asset, priceMap map[string]api.TickerPrice, display
 	return assetValue * rate, true
 }
 
+// EnrichedAsset wraps api.Asset with computed price fields.
+// Fields are nil when a price is unavailable or a target is not set.
+type EnrichedAsset struct {
+	api.Asset
+	CurrentValue *float64 `json:"currentValue,omitempty"` // value in display currency
+	CurrentPct   *float64 `json:"currentPct,omitempty"`   // % of portfolio total
+	DriftPct     *float64 `json:"driftPct,omitempty"`     // currentPct − effectiveTargetPct; nil when no targetPercentage
+}
+
+// EnrichedPortfolio wraps api.Portfolio, replacing Assets with enriched versions.
+type EnrichedPortfolio struct {
+	api.Portfolio
+	Assets []EnrichedAsset `json:"assets"`
+}
+
+// resolveEffectiveTarget converts asset.TargetPercentage (within-category %)
+// to an effective portfolio-level target by scaling by the category allocation.
+// Returns nil when the asset has no TargetPercentage.
+// Returns a pointer to 0.0 when the category has no matching allocation entry.
+func resolveEffectiveTarget(asset api.Asset, allocations []api.Allocation) *float64 {
+	if asset.TargetPercentage == nil {
+		return nil
+	}
+	for _, alloc := range allocations {
+		if alloc.Category == asset.Category {
+			v := (*asset.TargetPercentage / 100.0) * alloc.Percentage
+			return &v
+		}
+	}
+	zero := 0.0
+	return &zero
+}
+
 // Enrich computes TotalValue for each portfolio from its assets and live prices.
 // It mirrors enrichPortfoliosWithPrices() in usePortfolios.ts.
 //
@@ -167,6 +200,64 @@ func Enrich(portfolios []api.Portfolio, c *api.Client) ([]api.Portfolio, error) 
 		}
 		p.TotalValue = total
 		result[i] = p
+	}
+
+	return result, nil
+}
+
+// EnrichFull is like Enrich but returns EnrichedPortfolio values that include
+// per-asset currentValue, currentPct, and driftPct computed from live prices.
+func EnrichFull(portfolios []api.Portfolio, c *api.Client) ([]EnrichedPortfolio, error) {
+	priceMap := FetchPrices(portfolios, c)
+
+	displayCurrency := "CAD"
+	var settings api.Settings
+	if err := c.Get("/settings", &settings); err == nil && settings.DisplayCurrency != "" {
+		displayCurrency = settings.DisplayCurrency
+	}
+
+	result := make([]EnrichedPortfolio, len(portfolios))
+	for i, p := range portfolios {
+		// Compute per-asset values up front so we can derive the total and percentages.
+		type assetVal struct {
+			value float64
+			ok    bool
+		}
+		vals := make([]assetVal, len(p.Assets))
+		total := 0.0
+		hasAnyPrice := false
+		for j, a := range p.Assets {
+			v, ok := ComputeAssetValue(a, priceMap, displayCurrency)
+			vals[j] = assetVal{v, ok}
+			if ok {
+				hasAnyPrice = true
+				total += v
+			}
+		}
+
+		if hasAnyPrice {
+			p.TotalValue = total
+		}
+
+		enrichedAssets := make([]EnrichedAsset, len(p.Assets))
+		for j, a := range p.Assets {
+			ea := EnrichedAsset{Asset: a}
+			if vals[j].ok {
+				v := vals[j].value
+				ea.CurrentValue = &v
+				if total > 0 {
+					pct := v / total * 100
+					ea.CurrentPct = &pct
+					if et := resolveEffectiveTarget(a, p.Allocations); et != nil {
+						drift := pct - *et
+						ea.DriftPct = &drift
+					}
+				}
+			}
+			enrichedAssets[j] = ea
+		}
+
+		result[i] = EnrichedPortfolio{Portfolio: p, Assets: enrichedAssets}
 	}
 
 	return result, nil

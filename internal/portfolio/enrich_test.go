@@ -261,6 +261,152 @@ func TestEnrich_MultiplePortfolios(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// EnrichFull tests
+// ---------------------------------------------------------------------------
+
+func TestEnrichFull_ComputesCurrentValueAndPct(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(50.0), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	// VCN: 100 × $50 = $5000, CASH: $5000 → total $10000
+	// VCN currentPct = 50%, CASH currentPct = 50%
+	portfolios := []api.Portfolio{{
+		ID: "p1",
+		Assets: []api.Asset{
+			{ID: "a1", Ticker: "VCN", Exchange: "TSX", Category: "CanadianEquity", Quantity: 100, Currency: "CAD"},
+			{ID: "a2", Ticker: "CASH", Category: "Cash", Quantity: 5000, Currency: "CAD"},
+		},
+	}}
+
+	got, err := portfolio.EnrichFull(portfolios, c)
+	if err != nil {
+		t.Fatalf("EnrichFull: %v", err)
+	}
+	if got[0].TotalValue != 10000 {
+		t.Errorf("TotalValue = %.2f, want 10000", got[0].TotalValue)
+	}
+
+	vcn := got[0].Assets[0]
+	if vcn.CurrentValue == nil || math.Abs(*vcn.CurrentValue-5000) > 0.01 {
+		t.Errorf("VCN CurrentValue = %v, want 5000", vcn.CurrentValue)
+	}
+	if vcn.CurrentPct == nil || math.Abs(*vcn.CurrentPct-50) > 0.001 {
+		t.Errorf("VCN CurrentPct = %v, want 50", vcn.CurrentPct)
+	}
+
+	cash := got[0].Assets[1]
+	if cash.CurrentValue == nil || math.Abs(*cash.CurrentValue-5000) > 0.01 {
+		t.Errorf("CASH CurrentValue = %v, want 5000", cash.CurrentValue)
+	}
+	if cash.CurrentPct == nil || math.Abs(*cash.CurrentPct-50) > 0.001 {
+		t.Errorf("CASH CurrentPct = %v, want 50", cash.CurrentPct)
+	}
+}
+
+func TestEnrichFull_DriftPct(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "VCN", Exchange: "TSX", LatestPrice: ptr(50.0), Currency: "CAD"},
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	// VCN: $6000 (60%), effectiveTarget = (100/100)*50 = 50% → driftPct = +10%
+	// CASH: $4000 (40%), no targetPercentage → driftPct nil
+	portfolios := []api.Portfolio{{
+		ID: "p1",
+		Allocations: []api.Allocation{
+			{Category: "CanadianEquity", Percentage: 50},
+		},
+		Assets: []api.Asset{
+			{ID: "a1", Ticker: "VCN", Exchange: "TSX", Category: "CanadianEquity", Quantity: 120, Currency: "CAD", TargetPercentage: ptr(100.0)},
+			{ID: "a2", Ticker: "CASH", Category: "Cash", Quantity: 4000, Currency: "CAD"},
+		},
+	}}
+
+	got, err := portfolio.EnrichFull(portfolios, c)
+	if err != nil {
+		t.Fatalf("EnrichFull: %v", err)
+	}
+
+	vcn := got[0].Assets[0]
+	if vcn.DriftPct == nil {
+		t.Fatal("VCN DriftPct = nil, want +10")
+	}
+	if math.Abs(*vcn.DriftPct-10) > 0.001 {
+		t.Errorf("VCN DriftPct = %.4f, want 10", *vcn.DriftPct)
+	}
+
+	cash := got[0].Assets[1]
+	if cash.DriftPct != nil {
+		t.Errorf("CASH DriftPct = %v, want nil (no targetPercentage)", cash.DriftPct)
+	}
+}
+
+func TestEnrichFull_MissingPrice_NilFields(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+		// no VCN price
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{{
+		ID: "p1",
+		Assets: []api.Asset{
+			{ID: "a1", Ticker: "VCN", Exchange: "TSX", Category: "CanadianEquity", Quantity: 100, Currency: "CAD", TargetPercentage: ptr(100.0)},
+		},
+	}}
+
+	got, err := portfolio.EnrichFull(portfolios, c)
+	if err != nil {
+		t.Fatalf("EnrichFull: %v", err)
+	}
+	a := got[0].Assets[0]
+	if a.CurrentValue != nil {
+		t.Errorf("CurrentValue = %v, want nil (no price)", a.CurrentValue)
+	}
+	if a.CurrentPct != nil {
+		t.Errorf("CurrentPct = %v, want nil (no price)", a.CurrentPct)
+	}
+	if a.DriftPct != nil {
+		t.Errorf("DriftPct = %v, want nil (no price)", a.DriftPct)
+	}
+}
+
+func TestEnrichFull_PreservesBaseFields(t *testing.T) {
+	srv := newTestServer(t, []api.TickerPrice{
+		{Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},
+	}, "CAD")
+	defer srv.Close()
+	c := api.New(srv.URL, "", nil)
+
+	portfolios := []api.Portfolio{{
+		ID:   "p1",
+		Name: "TFSA",
+		Assets: []api.Asset{
+			{ID: "a1", Ticker: "CASH", Name: "Cash", Category: "Cash", Quantity: 10000, Currency: "CAD"},
+		},
+	}}
+
+	got, err := portfolio.EnrichFull(portfolios, c)
+	if err != nil {
+		t.Fatalf("EnrichFull: %v", err)
+	}
+	if got[0].ID != "p1" || got[0].Name != "TFSA" {
+		t.Errorf("portfolio base fields not preserved: id=%s name=%s", got[0].ID, got[0].Name)
+	}
+	a := got[0].Assets[0]
+	if a.ID != "a1" || a.Ticker != "CASH" || a.Quantity != 10000 {
+		t.Errorf("asset base fields not preserved: id=%s ticker=%s qty=%.0f", a.ID, a.Ticker, a.Quantity)
+	}
+}
+
 func TestFxRate_SameCurrency(t *testing.T) {
 	priceMap := map[string]api.TickerPrice{
 		"USDCAD=X": {Ticker: "USDCAD=X", LatestPrice: ptr(1.38)},

@@ -17,13 +17,13 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 	// list_portfolios
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "list_portfolios",
-		Description: "List all investment portfolios",
+		Description: "List all investment portfolios. Each asset includes currentValue, currentPct, and driftPct (where a target is set) computed from live prices.",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, _ noInput) (*sdkmcp.CallToolResult, any, error) {
 		var portfolios []api.Portfolio
 		if err := c.Get("/portfolios", &portfolios); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		enriched, err := portfolio.Enrich(portfolios, c)
+		enriched, err := portfolio.EnrichFull(portfolios, c)
 		if err != nil {
 			return ErrResult(err), nil, nil
 		}
@@ -36,13 +36,13 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 	}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "get_portfolio",
-		Description: "Get a specific investment portfolio by ID",
+		Description: "Get a specific investment portfolio by ID. Each asset includes currentValue, currentPct, and driftPct (where a target is set) computed from live prices.",
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getPortfolioInput) (*sdkmcp.CallToolResult, any, error) {
 		var p api.Portfolio
 		if err := c.Get("/portfolios/"+in.ID, &p); err != nil {
 			return ErrResult(err), nil, nil
 		}
-		enriched, err := portfolio.Enrich([]api.Portfolio{p}, c)
+		enriched, err := portfolio.EnrichFull([]api.Portfolio{p}, c)
 		if err != nil {
 			return ErrResult(err), nil, nil
 		}
