@@ -230,8 +230,21 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 		PortfolioID *string `json:"portfolioId,omitempty" jsonschema:"Optional portfolio ID; omit to rank across all portfolios"`
 	}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
-		Name:        "get_top_trades",
-		Description: "Get ranked BUY/SELL trade recommendations for a portfolio (or all portfolios) based on drift from target allocations.",
+		Name: "get_top_trades",
+		Description: `Get ranked BUY/SELL trade recommendations based on how far each asset has drifted from its target allocation.
+
+Results are ACTIONABLE trades only — not every drifting asset will appear:
+
+BUYs are suppressed when:
+- The portfolio holds no cash (nothing to deploy)
+- Available cash is below the portfolio's minimum transaction amount
+- The portfolio's cash is itself below its target weight (it needs replenishing before other assets are bought)
+
+When cash is present but insufficient for all BUYs, the highest-drift BUYs are funded first. A BUY may appear with a reduced amount (isPartialBuy=true) if cash only partially covers it; lower-priority BUYs are omitted.
+
+SELLs always appear regardless of cash.
+
+IMPORTANT: An empty BUY list does NOT mean there are no underweight assets — it means there is no available cash to act on them. Use list_portfolios or get_portfolio to check cash holdings before concluding a portfolio is balanced.`,
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getTopTradesInput) (*sdkmcp.CallToolResult, any, error) {
 		var portfolios []api.Portfolio
 		if in.PortfolioID != nil && *in.PortfolioID != "" {
