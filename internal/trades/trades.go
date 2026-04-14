@@ -16,12 +16,13 @@ type TradeRecommendation struct {
 	PortfolioName string  `json:"portfolioName"`
 	Ticker        string  `json:"ticker"`
 	AssetName     string  `json:"assetName"`
-	Direction     string  `json:"direction"`   // "BUY" | "SELL"
-	CurrentPct    float64 `json:"currentPct"`  // current weight in portfolio (%)
-	TargetPct     float64 `json:"targetPct"`   // effective target: (asset.TargetPercentage/100) × classAllocation
-	DriftPct      float64 `json:"driftPct"`    // currentPct - targetPct (signed)
-	DriftAmount   float64 `json:"driftAmount"` // |driftPct / 100 × totalValue|, in display currency
-	Currency      string  `json:"currency"`    // display currency
+	Direction     string  `json:"direction"`    // "BUY" | "SELL"
+	CurrentPct    float64 `json:"currentPct"`   // current weight in portfolio (%)
+	TargetPct     float64 `json:"targetPct"`    // effective target: (asset.TargetPercentage/100) × classAllocation
+	DriftPct      float64 `json:"driftPct"`     // currentPct - targetPct (signed)
+	DriftAmount   float64 `json:"driftAmount"`  // transaction amount in display currency (may be < |full drift| for partial buys)
+	IsPartialBuy  bool    `json:"isPartialBuy"` // true when BUY amount is capped by available portfolio cash
+	Currency      string  `json:"currency"`     // display currency
 }
 
 // resolveEffectiveAssetTarget mirrors resolveEffectiveAssetTarget in trade-calculations.ts.
@@ -55,6 +56,12 @@ func resolveEffectiveAssetTarget(asset api.Asset, allocations []api.Allocation) 
 // CASH assets are never included (they are not tradeable instruments).
 // Each asset's target is resolved via resolveEffectiveAssetTarget, which scales
 // the asset-level within-category targetPercentage by the portfolio's category allocation.
+//
+// BUY recommendations are subject to cash availability:
+//   - If the portfolio's cash is below its own target weight, all BUYs are suppressed.
+//   - BUYs are funded in priority order (highest |drift| first) against available cash.
+//   - A BUY is included only if there is at least minTransactionAmount of cash remaining.
+//   - A BUY may be partially filled (IsPartialBuy=true) if cash covers it only in part.
 func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, error) {
 	displayCurrency := "CAD"
 	var settings api.Settings
@@ -99,6 +106,39 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 			continue // division guard
 		}
 
+		// Compute minimum transaction amount in display currency (once, outside the loop).
+		minAmtDisplay := 0.0
+		if p.MinTransactionAmount != nil && *p.MinTransactionAmount > 0 {
+			minAmtDisplay = *p.MinTransactionAmount
+			if p.MinTransactionCurrency != "" && p.MinTransactionCurrency != displayCurrency {
+				minAmtDisplay *= portfolio.FxRate(p.MinTransactionCurrency, displayCurrency, priceMap)
+			}
+		}
+
+		// Compute available portfolio cash and its target weight.
+		// This mirrors the portfolioCashDisplay / cashTargetWeight logic in trade-calculations.ts.
+		portfolioCash := 0.0
+		cashTargetWeight := 0.0
+		for _, av := range assetVals {
+			if strings.EqualFold(av.asset.Ticker, "CASH") {
+				portfolioCash += av.value
+			}
+		}
+		for _, a := range p.Assets {
+			if strings.EqualFold(a.Ticker, "CASH") {
+				if t := resolveEffectiveAssetTarget(a, p.Allocations); t != nil {
+					cashTargetWeight += *t
+				}
+			}
+		}
+		currentCashWeight := portfolioCash / totalValue * 100
+		// If cash is below its own target weight, deploying it into other assets
+		// would push cash further below target — suppress all BUYs.
+		cashBelowTarget := currentCashWeight < cashTargetWeight
+
+		// Build per-portfolio recommendations (pre-cash-filter).
+		var portfolioRecs []TradeRecommendation
+
 		for _, av := range assetVals {
 			// CASH is never a tradeable asset.
 			if strings.EqualFold(av.asset.Ticker, "CASH") {
@@ -114,22 +154,14 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 			currentPct := av.value / totalValue * 100
 			targetPct := *effectiveTarget
 			driftPct := currentPct - targetPct
+			driftAmount := math.Abs(driftPct / 100 * totalValue)
 
-			if math.Abs(driftPct) < 0.001 {
+			if driftAmount < 1 {
 				continue // effectively on target
 			}
 
-			driftAmount := math.Abs(driftPct / 100 * totalValue)
-
-			// Filter by minTransactionAmount if set.
-			if p.MinTransactionAmount != nil && *p.MinTransactionAmount > 0 {
-				minAmt := *p.MinTransactionAmount
-				if p.MinTransactionCurrency != "" && p.MinTransactionCurrency != displayCurrency {
-					minAmt *= portfolio.FxRate(p.MinTransactionCurrency, displayCurrency, priceMap)
-				}
-				if driftAmount < minAmt {
-					continue
-				}
+			if minAmtDisplay > 0 && driftAmount < minAmtDisplay {
+				continue
 			}
 
 			direction := "BUY"
@@ -137,7 +169,7 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 				direction = "SELL"
 			}
 
-			results = append(results, TradeRecommendation{
+			portfolioRecs = append(portfolioRecs, TradeRecommendation{
 				PortfolioID:   p.ID,
 				PortfolioName: p.Name,
 				Ticker:        av.asset.Ticker,
@@ -149,6 +181,54 @@ func Compute(portfolios []api.Portfolio, c *api.Client) ([]TradeRecommendation, 
 				DriftAmount:   driftAmount,
 				Currency:      displayCurrency,
 			})
+		}
+
+		// Separate sells from buys; sells are always included.
+		for _, rec := range portfolioRecs {
+			if rec.Direction == "SELL" {
+				results = append(results, rec)
+			}
+		}
+
+		var buys []TradeRecommendation
+		for _, rec := range portfolioRecs {
+			if rec.Direction == "BUY" {
+				buys = append(buys, rec)
+			}
+		}
+
+		if len(buys) == 0 {
+			continue
+		}
+
+		// Cash is below its own target allocation — don't deploy cash into other assets.
+		if cashBelowTarget {
+			continue
+		}
+
+		// Not enough cash to meet minimum transaction threshold — skip all buys.
+		if portfolioCash <= 0 || (minAmtDisplay > 0 && portfolioCash < minAmtDisplay) {
+			continue
+		}
+
+		// Fund BUYs in priority order (highest |drift| first) against available cash.
+		sort.SliceStable(buys, func(i, j int) bool {
+			return math.Abs(buys[i].DriftPct) > math.Abs(buys[j].DriftPct)
+		})
+
+		cashRemaining := portfolioCash
+		for _, rec := range buys {
+			if cashRemaining >= rec.DriftAmount {
+				cashRemaining -= rec.DriftAmount
+				results = append(results, rec)
+			} else if cashRemaining > 0 && (minAmtDisplay == 0 || cashRemaining >= minAmtDisplay) {
+				// Partial buy: cap DriftAmount to remaining cash.
+				rec.DriftAmount = cashRemaining
+				rec.IsPartialBuy = true
+				results = append(results, rec)
+				cashRemaining = 0
+			}
+			// else: no cash left — omit this BUY entirely.
 		}
 	}
 
