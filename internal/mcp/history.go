@@ -15,9 +15,9 @@ import (
 func registerHistoryTools(server *sdkmcp.Server, c *api.Client) {
 	// list_snapshots
 	type listSnapshotsInput struct {
-		PortfolioID *string `json:"portfolioId,omitempty" jsonschema:"Optional portfolio ID to filter snapshots (client-side with E2EE)"`
-		StartDate   *string `json:"startDate,omitempty" jsonschema:"Optional start date (YYYY-MM-DD)"`
-		EndDate     *string `json:"endDate,omitempty" jsonschema:"Optional end date (YYYY-MM-DD)"`
+		PortfolioID *string `json:"portfolioId,omitempty" jsonschema:"Optional portfolio ID to filter snapshots (filtered client-side — server cannot filter encrypted docs by portfolioId)"`
+		StartDate   *string `json:"startDate,omitempty" jsonschema:"Optional start date (YYYY-MM-DD); filtered server-side"`
+		EndDate     *string `json:"endDate,omitempty" jsonschema:"Optional end date (YYYY-MM-DD); filtered server-side"`
 	}
 	sdkmcp.AddTool(server, &sdkmcp.Tool{
 		Name:        "list_snapshots",

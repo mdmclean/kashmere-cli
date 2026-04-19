@@ -4,8 +4,10 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/performance"
 	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	"github.com/mdmclean/kashmere-cli/internal/trades"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -209,6 +211,68 @@ func registerPortfolioTools(server *sdkmcp.Server, c *api.Client) {
 			return ErrResult(err), nil, nil
 		}
 		return JSONResult(enriched[0]), nil, nil
+	})
+
+	// get_portfolio_performance
+	type getPortfolioPerformanceInput struct {
+		PortfolioID string  `json:"portfolioId" jsonschema:"The portfolio ID"`
+		StartDate   *string `json:"startDate,omitempty" jsonschema:"Optional start date (YYYY-MM-DD); defaults to earliest non-zero snapshot"`
+		EndDate     *string `json:"endDate,omitempty" jsonschema:"Optional end date (YYYY-MM-DD); defaults to most recent non-zero snapshot"`
+	}
+	sdkmcp.AddTool(server, &sdkmcp.Tool{
+		Name:        "get_portfolio_performance",
+		Description: "Compute time-weighted return (TWR) for a portfolio. Uses Modified Dietz to adjust for cash flows (deposits/withdrawals). Returns simple return, TWR, and CAGR over the date range.",
+	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in getPortfolioPerformanceInput) (*sdkmcp.CallToolResult, any, error) {
+		// Fetch portfolio for name
+		var p api.Portfolio
+		if err := c.Get("/portfolios/"+in.PortfolioID, &p); err != nil {
+			return ErrResult(err), nil, nil
+		}
+
+		// Fetch snapshots (date-filtered server-side)
+		params := url.Values{}
+		if in.StartDate != nil {
+			params.Set("startDate", *in.StartDate)
+		}
+		if in.EndDate != nil {
+			params.Set("endDate", *in.EndDate)
+		}
+		snapshotPath := "/history/snapshots"
+		if len(params) > 0 {
+			snapshotPath += "?" + params.Encode()
+		}
+		var snapshots []api.PortfolioSnapshot
+		if err := c.GetSnapshots(snapshotPath, &snapshots); err != nil {
+			return ErrResult(err), nil, nil
+		}
+		// Filter client-side to this portfolio
+		filtered := make([]api.PortfolioSnapshot, 0, len(snapshots))
+		for _, s := range snapshots {
+			if s.PortfolioID == in.PortfolioID {
+				filtered = append(filtered, s)
+			}
+		}
+
+		// Fetch all cashflows, filter client-side
+		var cashflows []api.CashFlow
+		if err := c.Get("/cashflows", &cashflows); err != nil {
+			return ErrResult(err), nil, nil
+		}
+
+		startDate := ""
+		if in.StartDate != nil {
+			startDate = *in.StartDate
+		}
+		endDate := ""
+		if in.EndDate != nil {
+			endDate = *in.EndDate
+		}
+
+		result, err := performance.Compute(in.PortfolioID, p.Name, filtered, cashflows, startDate, endDate)
+		if err != nil {
+			return ErrResult(err), nil, nil
+		}
+		return JSONResult(result), nil, nil
 	})
 
 	// delete_portfolio

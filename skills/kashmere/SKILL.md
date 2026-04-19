@@ -1,8 +1,9 @@
 ---
 name: kashmere
 description: Use when the user asks about their Kashmere financial data — portfolio
-             values, allocation drift, trade recommendations, goal progress, mortgage
-             details, cash flows, prices, or net worth.
+             values, allocation drift, trade recommendations, portfolio performance
+             and returns, goal progress, mortgage details, cash flows, prices, or
+             net worth.
 ---
 
 # Kashmere
@@ -18,7 +19,8 @@ directly — no bash required.
 
 **Available tools:** `get_dashboard`, `list_portfolios`, `get_portfolio`,
 `create_portfolio`, `update_portfolio`, `delete_portfolio`, `list_institutions`,
-`get_top_trades`, `list_goals`, `get_goal`, `create_goal`, `update_goal`,
+`get_top_trades`, `get_portfolio_performance`,
+`list_goals`, `get_goal`, `create_goal`, `update_goal`,
 `list_cashflows`, `get_cashflow`, `create_cashflow`, `update_cashflow`,
 `list_mortgages`, `get_mortgage`, `create_mortgage`, `update_mortgage`,
 `list_snapshots`, `create_snapshot`, `list_prices`, `get_settings`, `update_settings`

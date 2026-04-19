@@ -4,9 +4,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/mdmclean/kashmere-cli/internal/api"
+	"github.com/mdmclean/kashmere-cli/internal/performance"
 	"github.com/mdmclean/kashmere-cli/internal/portfolio"
 	"github.com/mdmclean/kashmere-cli/internal/trades"
 	"github.com/spf13/cobra"
@@ -50,6 +52,65 @@ var portfolioGetCmd = &cobra.Command{
 			outputError(err, 0)
 		}
 		outputJSON(enriched[0])
+		return nil
+	},
+}
+
+var (
+	perfFrom string
+	perfTo   string
+)
+
+var portfolioPerformanceCmd = &cobra.Command{
+	Use:   "performance <id>",
+	Short: "Compute time-weighted return (TWR) for a portfolio",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := api.New(cfg.APIBaseURL, cfg.APIKey, encKey)
+		portfolioID := args[0]
+
+		// Fetch the portfolio for its name
+		var p api.Portfolio
+		if err := client.Get("/portfolios/"+portfolioID, &p); err != nil {
+			outputError(err, 0)
+		}
+
+		// Fetch snapshots (filtered by date range server-side)
+		snapshotPath := "/history/snapshots"
+		params := url.Values{}
+		if perfFrom != "" {
+			params.Set("startDate", perfFrom)
+		}
+		if perfTo != "" {
+			params.Set("endDate", perfTo)
+		}
+		if len(params) > 0 {
+			snapshotPath += "?" + params.Encode()
+		}
+		var snapshots []api.PortfolioSnapshot
+		if err := client.GetSnapshots(snapshotPath, &snapshots); err != nil {
+			outputError(err, 0)
+		}
+		// Filter client-side to this portfolio
+		filtered := snapshots[:0]
+		for _, s := range snapshots {
+			if s.PortfolioID == portfolioID {
+				filtered = append(filtered, s)
+			}
+		}
+		snapshots = filtered
+
+		// Fetch cashflows and filter client-side
+		var cashflows []api.CashFlow
+		if err := client.Get("/cashflows", &cashflows); err != nil {
+			outputError(err, 0)
+		}
+
+		result, err := performance.Compute(portfolioID, p.Name, snapshots, cashflows, perfFrom, perfTo)
+		if err != nil {
+			return err
+		}
+		outputJSON(result)
 		return nil
 	},
 }
@@ -282,6 +343,10 @@ func init() {
 	portfolioUpdateCmd.Flags().StringVar(&pfAllocationsJSON, "allocations", "", "New allocations JSON")
 	portfolioUpdateCmd.Flags().StringVar(&pfAssetsJSON, "assets", "", "New assets JSON")
 
-	portfolioCmd.AddCommand(portfolioListCmd, portfolioGetCmd, portfolioCreateCmd, portfolioUpdateCmd, portfolioTopTradesCmd)
+	// performance flags
+	portfolioPerformanceCmd.Flags().StringVar(&perfFrom, "from", "", "Start date YYYY-MM-DD (default: earliest snapshot)")
+	portfolioPerformanceCmd.Flags().StringVar(&perfTo, "to", "", "End date YYYY-MM-DD (default: latest snapshot)")
+
+	portfolioCmd.AddCommand(portfolioListCmd, portfolioGetCmd, portfolioCreateCmd, portfolioUpdateCmd, portfolioTopTradesCmd, portfolioPerformanceCmd)
 	rootCmd.AddCommand(portfolioCmd)
 }
