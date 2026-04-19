@@ -137,7 +137,8 @@ type EnrichedAsset struct {
 // EnrichedPortfolio wraps api.Portfolio, replacing Assets with enriched versions.
 type EnrichedPortfolio struct {
 	api.Portfolio
-	Assets []EnrichedAsset `json:"assets"`
+	Assets    []EnrichedAsset `json:"assets"`
+	OwnerName string          `json:"ownerName,omitempty"`
 }
 
 // resolveEffectiveTarget converts asset.TargetPercentage (within-category %)
@@ -216,6 +217,22 @@ func EnrichFull(portfolios []api.Portfolio, c *api.Client) ([]EnrichedPortfolio,
 		displayCurrency = settings.DisplayCurrency
 	}
 
+	ownerName := func(owner string) string {
+		switch owner {
+		case "person1":
+			if settings.Person1Name != "" {
+				return settings.Person1Name
+			}
+		case "person2":
+			if settings.Person2Name != "" {
+				return settings.Person2Name
+			}
+		case "joint":
+			return "Joint"
+		}
+		return owner
+	}
+
 	result := make([]EnrichedPortfolio, len(portfolios))
 	for i, p := range portfolios {
 		// Compute per-asset values up front so we can derive the total and percentages.
@@ -257,7 +274,7 @@ func EnrichFull(portfolios []api.Portfolio, c *api.Client) ([]EnrichedPortfolio,
 			enrichedAssets[j] = ea
 		}
 
-		result[i] = EnrichedPortfolio{Portfolio: p, Assets: enrichedAssets}
+		result[i] = EnrichedPortfolio{Portfolio: p, Assets: enrichedAssets, OwnerName: ownerName(p.Owner)}
 	}
 
 	return result, nil
