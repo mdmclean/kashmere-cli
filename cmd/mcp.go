@@ -32,9 +32,28 @@ var mcpCmd = &cobra.Command{
 }
 
 func loadMCPConfig() ([]byte, *api.Client, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, nil, fmt.Errorf("run 'kashmere setup' first: %w", err)
+	apiKey := os.Getenv("KASHMERE_API_KEY")
+	salt := os.Getenv("KASHMERE_SALT")
+	apiBaseURL := os.Getenv("KASHMERE_API_BASE_URL")
+
+	if apiKey == "" || salt == "" {
+		cfg, err := config.Load()
+		if err != nil {
+			return nil, nil, fmt.Errorf("run 'kashmere setup' first: %w", err)
+		}
+		if apiKey == "" {
+			apiKey = cfg.APIKey
+		}
+		if salt == "" {
+			salt = cfg.Salt
+		}
+		if apiBaseURL == "" {
+			apiBaseURL = cfg.APIBaseURL
+		}
+	}
+
+	if apiBaseURL == "" {
+		apiBaseURL = "https://kashmere.app/api/v1"
 	}
 
 	passphrase := os.Getenv("KASHMERE_PASSPHRASE")
@@ -45,16 +64,16 @@ func loadMCPConfig() ([]byte, *api.Client, error) {
 		)
 	}
 
-	salt, err := crypto.SaltFromBase64(cfg.Salt)
+	saltBytes, err := crypto.SaltFromBase64(salt)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid salt in config: %w", err)
+		return nil, nil, fmt.Errorf("invalid salt: %w", err)
 	}
-	encKey, err := crypto.DeriveKey(passphrase, salt)
+	encKey, err := crypto.DeriveKey(passphrase, saltBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("deriving encryption key: %w", err)
 	}
 
-	client := api.New(cfg.APIBaseURL, cfg.APIKey, encKey)
+	client := api.New(apiBaseURL, apiKey, encKey)
 	return encKey, client, nil
 }
 
