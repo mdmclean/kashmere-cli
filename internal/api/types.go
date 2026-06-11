@@ -131,6 +131,28 @@ type TickerPrice struct {
 	MarketTime       string   `json:"marketTime,omitempty"`
 }
 
+// ApiKey mirrors the TypeScript ApiKey type from @fp/shared.
+// createdByUserId is optional — legacy keys created before this field was added
+// will have an empty string; the server leaves those keys alone during revocation
+// so as not to accidentally delete keys whose creator cannot be determined.
+type ApiKey struct {
+	ID              string `json:"id"`
+	AccountID       string `json:"accountId"`
+	Name            string `json:"name"`
+	KeyHash         string `json:"keyHash"`
+	CreatedAt       string `json:"createdAt"`
+	CreatedByUserID string `json:"createdByUserId,omitempty"`
+}
+
+// Session mirrors the TypeScript Session type from @fp/shared.
+// Sessions are server-side records that allow JWT revocation.
+type Session struct {
+	ID        string `json:"id"`
+	UserID    string `json:"userId"`
+	AccountID string `json:"accountId"`
+	CreatedAt string `json:"createdAt"`
+}
+
 // encryptedDoc is the wire format for encrypted payloads.
 type encryptedDoc struct {
 	ID        string `json:"id,omitempty"`
